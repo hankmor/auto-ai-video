@@ -1,0 +1,352 @@
+# 自动视频制作器配置
+
+# 项目设置
+project:
+  name: "ai-video-maker"
+  output_dir: "./output"
+
+# 字体配置
+fonts:
+  # 字体优先级列表。将使用第一个存在的文件。
+  chinese: 
+    - "/System/Library/Fonts/PingFang.ttc"
+    - "/System/Library/Fonts/STHeiti Medium.ttc"
+    - "assets/fonts/SimHei.ttf"
+  
+  english:
+    - "/System/Library/Fonts/Helvetica.ttc"
+    - "/System/Library/Fonts/Arial.ttf"
+    - "assets/fonts/Inter-Bold.ttf"
+
+# 模型选择
+models:
+  # ==========================================
+  # [默认] 配置：火山引擎 (豆包 + 即梦)
+  # ==========================================
+  llm:
+    provider: "volcengine"
+    model: "ep-20251226135441-98nfq" # 替换为您的 Endpoint ID
+  
+  image:
+    provider: "volcengine"
+    # model: "jimeng-4.0" # Jimeng 4.0 (jimeng_t2i_v40)
+    # model: "jimeng-4.0" # 即梦 4.0 (jimeng_t2i_v40)
+    model: "doubao-3.0"
+    # model: "mock"
+
+  # ==========================================
+  # [示例] 配置：OpenAI (GPT-4 + DALL-E)
+  # ==========================================
+  # llm:
+  #   provider: "openai"
+  #   model: "gpt-4o"
+  #
+  # image:
+  #   provider: "openai"
+  #   model: "dall-e-3"
+  
+  # ==========================================
+  # [示例] 配置：Google (Gemini)
+  # ==========================================
+  # llm:
+  #   provider: "google"
+  #   model: "gemini-1.5-pro"
+  #
+  # image:
+  #   provider: "google"
+  #   model: "imagen-3.0" # (注意：API 访问可能受限)
+  # image:
+  #   provider: "openai"
+  #   model: "dall-e-3
+  
+  # 图像尺寸（分辨率）
+  # - "1024x1024" (1:1 正方形)
+  # - "1024x1792" (9:16 竖屏 - 手机/抖音)
+  # - "1792x1024" (16:9 横屏 - YouTube)
+  image_size: "1024x1792" # 默认为竖屏/手机
+  
+  # 图像风格配置（根据您的场景选择一个）：
+  
+  # 默认风格（如果未匹配到分类则使用）
+  # image_style: "Pop Mart style, 3D Chibi character, cute rendering, soft lighting"
+  image_style: "Super cute Chibi style, big head small body, expressive eyes, soft pastel colors, 2D vector art illustration, stickers style"
+
+  # 1. 定义视觉风格（提示词模板）
+  # 您可以在此处定义自己的风格，并使用简短的键名。
+  styles:
+    # --- 中国传统风 (Traditional Chinese) ---
+    # 水墨画风: 适合成语故事、古诗词、历史典故。特点: 留白、写意、高雅。
+    ink_wash: "Traditional Chinese Ink Wash Painting (Shui-mo hua), atmospheric, historical, elegant, masterpiece, calligraphy brush strokes"
+    # 剪纸风格: 适合春节、民俗、神话传说。特点: 红色主调、镂空、扁平。
+    paper_cut: "Chinese traditional paper cut art style, intricate red patterns, silhouette, folk art, festive, flat vector"
+
+    # --- 3D 动画风 (3D Animation) ---
+    # 皮克斯风: 适合睡前故事、温馨情感。特点: 色彩鲜艳、表情生动、迪士尼质感。
+    pixar: "Pixar style 3D animation, vibrant colors, expressive characters, soft cinematic lighting, 3D cartoon style"
+    # 泡泡玛特/盲盒风: 适合儿童绘本、萌系解说。特点: 乃至感、Q版头身比、光泽感、可爱。
+    pop_mart: "Pop Mart style, 3D Chibi character, cute rendering, soft lighting, clay material, dreamlike colors, blind box toy"
+    # 黏土动画风: 适合定格动画、手工感视频。特点: 指纹痕迹、粗糙质感、小羊肖恩风格。
+    claymation: "Aardman style claymation, stop motion look, handmade texture, finger prints visible, plasticine"
+
+    # --- 2D 插画风 (2D Illustration) ---
+    # 日漫风: 适合漫画解说、热血故事。特点: 吉卜力/新海诚、线条清晰、赛璐璐上色。
+    anime: "Japanese Anime style, Studio Ghibli inspired, detailed background, cel shaded, vibrant, Makoto Shinkai lighting"
+    # 扁平插画风: 适合知识科普、商业思维。特点: Notion/Tech 风格、极简、矢量、干净。
+    flat_tech: "Corporate memphis style, flat vector illustration, minimalist, tech startup vibe, solid colors, clean lines"
+    # Q版贴纸风: 适合轻松搞笑、表情包。特点: 二维、描边、大头小身。
+    chibi_2d: "Super cute Chibi style, big head small body, expressive eyes, soft pastel colors, 2D vector art illustration, stickers style"
+    # 水彩绘本风: 适合情感、散文、唯美故事。特点: 晕染、柔和、艺术感。
+    watercolor: "Watercolor illustration, soft pastel colors, paper texture, dreamy, artistic, hand painted"
+
+    # --- 电影与写实 (Cinematic & Realistic) ---
+    # 电影史诗风: 适合严肃历史、战争推演、纪录片。特点: 8K写实、戏剧光影、大片感。
+    cinematic: "Realistic cinematic historical drama, 8k resolution, detailed costumes, dramatic lighting, movie still, HBO style"
+    # 黑色电影/悬疑风: 适合侦探、悬疑、怪谈。特点: 高对比度、阴影、黑白或低饱和度。
+    noir: "Film Noir style, high contrast, dramatic shadows, mysterious, detective movie, dim lighting, moody"
+    # 赛博朋克风: 适合科幻、未来科技、元宇宙。特点: 霓虹灯、机械、夜景、蓝紫调。
+    cyberpunk: "Cyberpunk 2077 style, futuristic city, neon lights, high tech low life, mechanical details, glowing"
+    # 极简治愈风: 适合冥想、助眠、心理疗愈。特点: 自然风光、留白、宁静、莫兰迪色系。
+    zen: "Minimalist nature photography, serene atmosphere, soft focus, zen, tranquil, cinematic lighting, Morandi colors"
+    # 迪士尼绘本风: 适合英语绘本。特点: 经典手绘、色彩饱满、温暖、黄金时代插画。
+    disney_storybook: "Classic fairy tale storybook illustration, Golden Age style, vibrant colors, magical atmosphere, hand painted"
+
+  # 2. 将分类映射到默认风格
+  # 当您使用 --category 时，默认使用这些风格。
+  category_defaults:
+    # "成语故事": "ink_wash"
+    "成语故事": "pop_mart"
+    "睡前故事": "pixar"
+    "儿童绘本": "pop_mart"
+    "历史故事": "ink_wash"
+    "漫画解说": "anime"
+    "助眠冥想": "zen"
+    "英语绘本": "disney_storybook"
+    "神话故事": "ink_wash"
+    "民间故事": "watercolor"
+    "少儿百科": "chibi_2d"
+    "读书分享": "flat_tech"
+    
+  # 3. 分类别名（快捷方式）
+  # 将简短的别名映射到上面的完整分类键。
+  category_aliases:
+    "cy": "成语故事"
+    "et": "儿童绘本"
+    "sq": "睡前故事"
+    "ls": "历史故事"
+    "mh": "漫画解说"
+    "zm": "助眠冥想"
+    "en": "英语绘本"
+    "sh": "神话故事"
+    "mj": "民间故事"
+    "bk": "少儿百科"
+    "db": "读书分享"
+
+  # 布局映射：category -> mode (movie / book)
+  # movie: 字幕覆盖（标准）
+  # book:  分屏视图（图在上，文在下）
+  category_layouts:
+    "成语故事": "book"
+    "儿童绘本": "book"
+    "睡前故事": "book"
+    "英语绘本": "book"
+    "历史故事": "movie"
+    "漫画解说": "movie"
+    "助眠冥想": "movie"
+    "神话故事": "movie"
+    "民间故事": "book"
+    "少儿百科": "movie"
+    "读书分享": "movie"
+  # 直接通过 --style 使用风格更好，但为了向后兼容保留，或者可以移除。
+
+  animator: "mock"       # 选项: luma, stability, mock
+  # animator: "stability"
+  # animator: "luma"
+  
+  # 4. TTS 语音选项 (Edge-TTS) & 分类映射
+  # 如果分类匹配，系统将从列表中随机选择一个。
+  # 或者在下方使用特定的单个语音覆盖。
+ 
+  # Voice Reference (注释说明):
+  # -------------------------------------------------------------------------
+  # [女声 - Female]
+  # zh-CN-XiaoxiaoNeural: 温暖、知性、标准新闻腔 (适合: 纪录片、情感、通用、睡前故事)
+  # zh-CN-XiaoyiNeural:   可爱、活泼、幼齿 (适合: 儿童绘本、Q版、搞笑、成语)
+  # zh-CN-XiaomoNeural:   温柔、从容 (适合: 散文、角色扮演)
+  # zh-CN-XiaohanNeural:  富有情感、讲故事 (适合: 有声书、情感类)
+  # zh-CN-XiaoruiNeural:  沉稳、年长 (适合: 长辈角色)
+  # zh-CN-XiaoshuangNeural: 活泼童声 (适合: 纯儿童内容)
+  #
+  # [男声 - Male]
+  # zh-CN-YunxiNeural:    沉稳、自然、磁性 (适合: 讲故事、小说、主流旁白、成语) - Default
+  # zh-CN-YunyangNeural:  专业、浑厚、新闻腔 (适合: 历史解说、硬核科普)
+  # zh-CN-YunxiaNeural:   可爱、少年音 (适合: 绘本男童、动漫少年)
+  # zh-CN-YunjianNeural:  激昂、体育 (适合: 热血漫、动作)
+  # zh-CN-YunfengNeural:  成熟、稳重 (适合: 商业、正式场合)
+  # zh-CN-YunhaoNeural:   广告腔、有活力 (适合: 营销、快节奏)
+  #
+  # [方言 - Dialect]
+  # zh-CN-liaoning-XiaobeiNeural: 东北话 (适合: 搞笑段子)
+  # zh-CN-shaanxi-XiaoniNeural:   陕西话 (适合: 特色解说)
+  
+  # [English - 英文]
+  # en-US-AnaNeural:      Child, Sweet (适合: 绘本童声)
+  # en-US-AriaNeural:     Confident, Professional (适合: 旁白)
+  # en-US-ChristopherNeural: Calm, Reliable (适合: 讲故事)
+  # en-US-GuyNeural:      Male, General (适合: 通用)
+  # en-US-JennyNeural:    Female, General (适合: 通用)
+  # en-US-MichelleNeural: Professional (适合: 教学)
+  # -------------------------------------------------------------------------
+  
+  tts_voice: "zh-CN-YunxiNeural" # 全局默认
+  tts_voice_title: "zh-CN-XiaoxiaoNeural"
+ 
+  # 随机池配置 (Random Pools)
+  # 系统会从对应的列表中随机抽取一个声音，实现"男女搭配"
+  category_voices:
+    "成语故事": ["zh-CN-YunxiNeural", "zh-CN-XiaoxiaoNeural", "zh-CN-XiaoyiNeural", "zh-CN-YunxiaNeural"] 
+    "历史故事": ["zh-CN-YunyangNeural", "zh-CN-YunxiNeural", "zh-CN-XiaoxiaoNeural"]                  
+    "睡前故事": ["zh-CN-XiaoxiaoNeural", "zh-CN-YunxiNeural", "zh-CN-XiaoyiNeural"] 
+    "儿童绘本": ["zh-CN-XiaoyiNeural", "zh-CN-YunxiaNeural"]                     
+    "漫画解说": ["zh-CN-YunxiNeural", "zh-CN-YunjianNeural", "zh-CN-XiaoyiNeural"]                        
+    "助眠冥想": ["zh-CN-XiaoxiaoNeural", "zh-CN-YunxiNeural"]                       
+    "英语绘本": ["en-US-AnaNeural", "en-US-ChristopherNeural", "en-US-MichelleNeural", "en-US-GuyNeural"] 
+    "神话故事": ["zh-CN-YunyangNeural", "zh-CN-YunxiNeural", "zh-CN-XiaoxiaoNeural"]
+    "民间故事": ["zh-CN-XiaoxiaoNeural", "zh-CN-XiaoyiNeural", "zh-CN-YunxiNeural"]
+    "少儿百科": ["zh-CN-XiaoyiNeural", "zh-CN-XiaoshuangNeural", "zh-CN-YunxiaNeural"]
+    "读书分享": ["zh-CN-YunxiNeural", "zh-CN-YunyangNeural", "zh-CN-XiaoxiaoNeural"]
+
+  # 5. 背景音乐映射 (分类 -> assets/music/ 中的文件名)
+  category_bgm:
+    "成语故事": "guqin.mp3"         # 古琴/中国风
+    "历史解说": "epic.mp3"          # 史诗/宏大
+    "睡前故事": "lullaby.mp3"       # 摇篮曲/温馨
+    "儿童绘本": "playful.mp3"       # 欢快/可爱
+    "漫画解说": "action.mp3"        # 节奏感强
+    "助眠冥想": "meditation.mp3"    # 专门的冥想音乐
+    "英语绘本": "storybook.mp3"     # 迪士尼风/管弦乐
+    "神话故事": "epic.mp3"
+    "民间故事": "guqin.mp3"
+    "少儿百科": "playful.mp3"
+    "读书分享": "meditation.mp3"
+
+  # 5.5 类目语速配置（TTS语速调整，负数=慢，正数=快）
+  category_speech_rates:
+    "儿童绘本": "-15%"    # 稍慢，便于儿童理解
+    "英语绘本": "-22%"    # 标准偏慢，有利于语言学习
+    "历史解说": "-12%"    # 稳重节奏
+    "成语故事": "-12%"    # 稳重节奏，适合讲解
+    "睡前故事": "-20%"    # 非常慢，舒缓助眠
+    "助眠冥想": "-25%"    # 极慢，深度放松
+    "漫画解说": "-8%"     # 略慢，保持清晰
+    "神话故事": "-12%"    # 稳重节奏，适合讲解
+    "民间故事": "-12%"    # 娓娓道来
+    "少儿百科": "-10%"    # 清晰明快
+    "读书分享": "-15%"    # 沉稳思考
+
+  # 5.6 场景数量配置
+  # 全局默认值：所有类目默认使用这个范围
+  scene_count:
+    min: 14  # 最少场景数
+    max: 26  # 最多场景数
+  
+  # 分类特定配置（可选，覆盖全局默认值）
+  # 如果某个类目需要不同的场景数量，在此配置
+  category_scene_count:
+    "睡前故事":
+      min: 10  # 睡前故事可以稍短
+      max: 18
+    "历史故事":
+      min: 16  # 历史故事需要更详细
+      max: 20
+    "神话故事":
+      min: 16  # 神话故事情节丰富
+      max: 20
+    "英语绘本":
+      min: 14  # 英语绘本需要更详细
+      max: 20
+    "民间故事":
+      min: 16
+      max: 24
+    "少儿百科":
+      min: 12
+      max: 18
+    "读书分享":
+      min: 15
+      max: 25
+
+  # 6. 转场 (Category -> Effect)
+  # 支持: "none", "crossfade", "fadeinout" (黑屏)
+  # 默认持续时间通常为 0.5-1.0秒。
+  category_transitions:
+    "成语故事": "crossfade"       # 水墨晕染感
+    "助眠冥想": "crossfade_slow"  # 极慢速淡入淡出 (2s)
+    "历史解说": "crossfade"       # 纪录片叠化
+    "睡前故事": "crossfade"       # 温馨叠化
+    "儿童绘本": "none"            # 像翻书一样硬切 (或者 page_turn 即使没有实现)
+    "漫画解说": "none"            # 硬切，节奏快
+    "英语绘本": "none"
+    "神话故事": "crossfade"
+    "民间故事": "crossfade"
+    "少儿百科": "none"
+    "读书分享": "none"
+    
+# 功能开关
+features:
+
+# 功能开关
+  enable_animation: false
+  enable_subtitles: true
+  enable_brand_intro: false   # 品牌片头（默认关闭，避免影响前3秒黄金时间）
+  enable_brand_outro: true    # 品牌片尾（默认开启，引导关注效果好）
+  enable_emotional_tts: false # 情感语音（默认关闭，edge-tts效果有限，保持声音一致性）
+
+# API 密钥和凭证
+# 推荐：将这些设置为环境变量（例如 export ARK_API_KEY=...）
+# 或者为了方便在此处定义。
+keys:
+  # --- 火山引擎 (豆包) 统一凭证 ---
+  # 这些 AK/SK 密钥将同时用于：
+  # 1. LLM (Ark 脚本生成)
+  # 2. 图像 (视觉智能生成)
+  volc_access_key: "" 
+  volc_secret_key: ""
+  
+  # 可选：Ark API 密钥（如果您只希望 LLM 使用 API 密钥）
+  # ark_api_key: ""
+  
+  # 其他提供商
+  openai_api_key: ""
+  gemini_api_key: ""
+
+
+  # 8. 发音修正 (Pronunciation Fixes)
+  # 修正 TTS 的多音字或语调问题
+  pronunciation_fixes:
+    "小狗钱钱": "小狗钱<phoneme alphabet='sapi' ph='qian 5'>钱</phoneme>"
+    # "小狗钱钱": "小狗钱 钱" # 备选方案
+
+  # 7. 敏感词过滤器（文本风控）
+  sensitive_words:
+    "龙袍": "战袍"
+    # "王冠": "发冠"
+    "皇冠": "发冠"
+    "杀掉": "杀害"
+    # "眼神凶狠": "神情严肃"
+    "Snow White": "Beautiful Princess"
+    "白雪公主": "美丽公主"
+    "smoke": "mist"
+    "lying on": "sitting beside"
+    "crying": "sad"
+    "killed": "defeated"
+    "dead": "sleeping"
+    "hurt": "safe"
+    # "杀戮": "战斗"
+    # "血流成河": "激烈的战斗"
+    # "鲜血": "红色液体"
+    # "尸体": "倒下的身影"
+    # "鬼魂": "神秘影子"
+    # "死亡": "离去"
+    # "自杀": "结束生命"
+    # "裸露": "穿着清凉"
+    # "恐怖": "神秘"
+
