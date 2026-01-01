@@ -1,115 +1,145 @@
-# AutoMaker - 自动化短视频生成工坊 🎬
+# AI Video Maker（自动视频生成流水线）
 
-AutoMaker 是一个全自动化的 AI 短视频生成与剪辑工具。它能根据一个简单的主题（Topic），利用 LLM 撰写剧本，调用 AI 绘画生成分镜，使用 TTS 生成配音，最后自动剪辑成片。
+一个“给我一个主题，就能自动生成成片”的 AI 视频制作工具：自动写分镜脚本、生成配图、配音、（可选）图生视频动画、字幕/拼音、封面、背景音乐，并最终合成 MP4。
 
-## ✨ 核心特性
-*   **全流程自动化**: 从创意到成片一键完成。
-*   **多模型支持**:
-    *   **LLM**: Volcengine (Doubao), OpenAI, Google Gemini
-    *   **Image**: Volcengine (Doubao/Jimeng), OpenAI (DALL-E 3)
-*   **智能排版**:
-    *   **电影模式 (Movie)**: 沉浸式全屏画面 + 底部悬浮字幕。
-    *   **绘本模式 (Book)**: 上图下文分屏，大号字体，适合儿童阅读。
-*   **丰富的风格库**: 内置水墨、皮克斯、日漫、极简治愈等 10+ 种视觉风格。
-*   **手机竖屏优化**: 完美支持 9:16 (TikTok/Douyin/Shorts) 比例。
+## 核心能力
 
-## 📂 文档索引 (Documentation)
+- **一键全流程**：`script → image → (animate) → audio → video`
+- **分类驱动的内容策略**：按类目自动选择画风、配音池、BGM、视频排版（book/movie）
+- **多模型支持**：
+  - 文案/脚本：火山引擎（豆包/Ark）、OpenAI、Google Gemini
+  - 图像：火山引擎（豆包/即梦）、OpenAI（DALL·E）、Mock
+  - 动画（可选）：Luma、Stability、Mock
+- **字幕与拼音**：开启后自动为中文字幕渲染拼音字幕
+- **自动封面**：生成 `cover.png`（中文标题带拼音；英文标题自动换行/排版），并可生成标题配音 `title_audio.mp3`
+- **背景音乐**：按类目自动混入 `assets/music/` 中的 BGM（自动降低音量，避免盖过人声）
 
-*   **[快速开始 (Quick Start)](README.md#🚀-快速开始)**: 环境安装与基础运行。
-*   **[配置指南 (Configuration)](docs/configuration.md)**: 详解 `config.yaml`，包括 API Key 配置、画风自定义、类目绑定。
-*   **[测试与调试 (Testing Guide)](docs/testing_guide.md)**: 如何使用 `tests/test_gen.py` 进行低成本的逻辑验证和 Mock 测试。
-*   **[架构说明 (Architecture)](docs/architecture.md)**: 系统模块拆解与代码结构。
-*   **[API 参考 (API Reference)](docs/api_reference.md)**: 核心类与方法的详细说明。
+## 技术栈
 
-## 🚀 快速开始
+- **Python**：要求 `>= 3.13`（见 `pyproject.toml`）
+- **多媒体合成**：`moviepy`
+- **TTS**：`edge-tts`
+- **拼音**：`pypinyin`
+- **配置**：`config.yaml`（`PyYAML`）
 
-### 1. 安装依赖
+## 快速开始
+
+### 1）安装依赖
+
+推荐使用 `uv`（仓库包含 `uv.lock`）：
+
 ```bash
-# 建议使用 Python 3.10+
+uv sync
+```
+
+或使用 `pip`（示例）：
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. 配置项目
-复制配置文件模板（如果有）或直接修改 `config.yaml`:
-```yaml
-keys:
-  volc_access_key: "YOUR_AK"
-  volc_secret_key: "YOUR_SK"
-```
+> 说明：本项目依赖列表以 `pyproject.toml` 为准；如果你使用 `pip`，请自行按环境准备依赖。
 
-### 3. 运行生成
+### 2）配置模型与密钥
+
+项目会读取环境变量，也支持在 `config.yaml` 的 `keys:` 中填写（推荐用环境变量更安全）。
+
+常见环境变量示例：
+
 ```bash
-# 生成一个关于“守株待兔”的视频
-python auto_maker/main.py --topic "守株待兔" --category "成语故事"
+# 火山引擎（LLM + 图像）
+export ARK_API_KEY="sk-..."          # 可选（如你用 Ark Key）
+export VOLC_ACCESS_KEY="AK..."
+export VOLC_SECRET_KEY="SK..."
+
+# OpenAI / Gemini（可选替换）
+export OPENAI_API_KEY="sk-..."
+export GEMINI_API_KEY="AIza..."
+
+# 动画（可选）
+export LUMA_API_KEY="kp-..."
+export STABILITY_API_KEY="sk-..."
 ```
 
-### 4. 常用命令
+模型选择与内容策略主要在 `config.yaml`：
+
+- `models.llm / models.image / models.animator`
+- `models.styles`（风格提示词）
+- `models.category_defaults`（类目→默认风格键）
+- `models.category_aliases`（类目别名，如 `cy/en/db`）
+- `models.category_layouts`（类目→布局：`book`/`movie`）
+- `models.category_voices`（类目→随机语音池）
+- `models.category_bgm`（类目→BGM 文件名）
+
+### 3）一键生成视频
+
 ```bash
-# 指定视觉风格
-python auto_maker/main.py --topic "未来城市" --style cyberpunk
-
-# 运行测试 (不消耗 Token)
-python tests/test_gen.py "测试运行" --category "成语故事"
+python main.py --topic "刻舟求剑" --category cy
 ```
 
+常用组合示例：
 
-## 📚 典型类目示例 (Examples)
-
-### 1. 📖 成语故事 (Idle Stories)
-*风格：水墨画 | 音乐：古琴 | 效果：0.8s 叠化*
 ```bash
-python auto_maker/main.py --topic "守株待兔" --category "成语故事"
+# 开启拼音字幕
+python main.py --topic "守株待兔" --category cy --subtitles
+
+# 强制指定风格（支持风格键，如 pixar / ink_wash / flat_tech，也可直接传自定义提示词）
+python main.py --topic "三国演义" --category ls --style pixar
+
+# 强制指定配音（覆盖随机语音池）
+python main.py --topic "The Lion and the Mouse" --category en --voice en-US-AnaNeural
 ```
 
-### 2. 🏰 历史解说 (History)
-*风格：写实历史画作 | 音乐：史诗 | 效果：0.8s 叠化*
+## 常用参数（CLI）
+
+- **`--topic`**：主题（支持 `标题:副标题`；也支持 `封面标题|上下文标题` 的高级写法）
+- **`--category`**：类目/系列（支持别名，见 `config.yaml` 的 `models.category_aliases`）
+- **`--style`**：覆盖画风（风格键或自定义提示词）
+- **`--voice`**：覆盖 TTS 语音（否则按类目语音池随机）
+- **`--subtitles` / `-sb`**：开启字幕（中文自动拼音）
+- **`--step`**：分步执行：`script | image | animate | audio | video | all`
+- **`--force`**：强制重新生成（即使已存在中间产物）
+
+## 分步运行（调试/可控生产）
+
 ```bash
-python auto_maker/main.py --topic "赤壁之战" --category "历史解说"
+python main.py --topic "小狗钱钱:第一章" --category db --step script
+python main.py --topic "小狗钱钱:第一章" --category db --step image
+python main.py --topic "小狗钱钱:第一章" --category db --step audio
+python main.py --topic "小狗钱钱:第一章" --category db --step video
 ```
 
-### 3. 🌙 睡前故事 (Bedtime Stories)
-*风格：皮克斯3D | 音乐：摇篮曲 | 效果：0.8s 叠化*
+> 脚本会落到当前作品目录下的 `script.json`，你可以手动修改后再继续生成后续步骤。
+
+## 输出结构
+
+主流程输出默认在：
+
+```
+products/<类目>/<主题>/
+  script.json
+  script.md
+  cover.png
+  title_audio.mp3
+  scene_*.png / scene_*.mp3 / scene_*.mp4（视配置而定）
+  final_video.mp4
+  metadata.json / metadata.md（发布信息，若生成成功）
+```
+
+## 背景音乐素材
+
+将音乐文件放在 `assets/music/`，并在 `config.yaml` 的 `models.category_bgm` 中配置映射。仓库已自带示例音乐：
+
+- `assets/music/guqin.mp3`、`epic.mp3`、`lullaby.mp3`、`meditation.mp3`、`playful.mp3`、`storybook.mp3` 等
+
+## 测试（可选）
+
+项目包含集成测试脚本（用于验证排版/BGM/合成逻辑）：
+
 ```bash
-python auto_maker/main.py --topic "小兔子找妈妈" --category "睡前故事"
+python tests/test_gen.py "测试主题" --category "成语故事"
 ```
 
-### 4. 🧘 助眠冥想 (Meditation)
-*风格：极简禅意 | 音乐：冥想曲 | 效果：2.0s 极慢叠化*
-```bash
-python auto_maker/main.py --topic "深海漫游引导" --category "助眠冥想"
-```
+## 许可证
 
-### 5. 📚 儿童绘本 (Picture Book)
-*风格：扁平插画 | 音乐：欢快 | 效果：硬切 (翻页感)*
-```bash
-python auto_maker/main.py --topic "勇敢的小火车" --category "儿童绘本"
-```
-
-### 6. 🇬🇧 英语绘本 (English Book)
-*风格：迪士尼 | 音乐：管弦乐 | 语言：纯正美音*
-```bash
-python auto_maker/main.py --topic "The Three Little Pigs" --category "英语绘本"
-```
-
-### 7. 💥 漫画解说 (Manga)
-*风格：日漫黑白 | 音乐：燃曲 | 效果：硬切 (快节奏)*
-```bash
-python auto_maker/main.py --topic "进击的巨人第一季解说" --category "漫画解说"
-```
-
-### 💡 进阶参数
-*   `--force`: 强制重新生成已存在的资源（图片/音频）。默认情况下，再次运行相同命令会自动**断点续传**。
-*   `--subtitles`: 强制开启拼音字幕（覆盖默认配置）。
-
-## 🛠️ 项目结构
-```
-.
-├── auto_maker/        # 核心源码
-│   ├── image_factory.py  # 图像生成工厂
-│   ├── video_editor.py   # 视频剪辑与合成
-│   └── ...
-├── config.yaml        # 全局配置文件
-├── output/            # 生成结果目录
-├── tests/             # 测试脚本
-└── docs/              # 详细文档
-```
+见 `LICENSE`。

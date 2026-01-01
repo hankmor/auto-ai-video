@@ -1,124 +1,97 @@
+import argparse
 import asyncio
 import os
-import argparse
 import time
-from auto_maker.config import config
-from auto_maker.script_generator import ScriptGenerator
-from auto_maker.image_factory import ImageFactory
-from auto_maker.audio_studio import AudioStudio
-from auto_maker.video_editor import VideoAssembler
-from auto_maker.models import Scene, VideoScript
 
-async def run_test(topic: str, script_path: str = None, category: str = "storybox"):
-    print(f"🧪 Starting Integration Test")
-    print(f"   LLM: {config.LLM_PROVIDER} / {config.LLM_MODEL}")
-    print(f"   Image: {config.IMAGE_PROVIDER} / {config.IMAGE_MODEL}")
-    print(f"   Category: {category}")
-    
-    # Enable Subtitles for this test
+from config.config import config
+from model.models import VideoScript
+from steps.image.factory import ImageFactory
+from steps.script.factory import ScriptGeneratorFactory
+from steps.audio.factory import AudioStudioFactory
+from steps.video.factory import VideoAssemblerFactory
+
+
+async def run_test(topic: str, script_path: str = None, category: str = "成语故事"):
+    print("🧪 开始集成测试（生成 1 幕迷你视频）")
+    print(f"   - LLM: {config.LLM_PROVIDER or 'auto'} / {config.LLM_MODEL}")
+    print(f"   - Image: {config.IMAGE_PROVIDER or 'auto'} / {config.IMAGE_MODEL}")
+    print(f"   - Category: {category}")
+
+    # 测试默认开启字幕（含拼音）
     config.ENABLE_SUBTITLES = True
-    
-    script = None
-    
-    # 1. Get Script (Load or Generate)
-    if script_path and os.path.exists(script_path):
-        print(f"\n📂 Loading existing script from: {script_path}")
-        try:
-            script = VideoScript.from_json(script_path)
-            print(f"✅ Script Loaded!")
-            print(f"   Title: {script.topic}")
-        except Exception as e:
-            print(f"❌ Failed to load script: {e}")
-            return
-    elif topic:
-        print(f"\n📝 Generating Script (Design + Scenes) for topic: '{topic}'...")
-        try:
-            generator = ScriptGenerator()
-            script = generator.generate_script(topic)
-            print(f"✅ Script Generated!")
-            print(f"   Title: {script.topic}")
-            print(f"   Style: {script.visual_style}")
-            print(f"   Scenes: {len(script.scenes)} generated.")
-        except Exception as e:
-            print(f"❌ Script Generation Failed: {e}")
-            return
-    else:
-        print("❌ Error: You must provide either a 'topic' or a '--script' path.")
-        return
 
-    # 2. Pick First Scene for Full Test
-    first_scene = script.scenes[0]
-    print(f"\n🎬 Processing Scene 1 for End-to-End Test...")
-    print(f"   Narration: {first_scene.narration}")
-    print(f"   Prompt (Truncated): {first_scene.image_prompt[:50]}...")
-    
-    # Ensure output dir exists
-    # Ensure output dir exists (tests/output)
-    # Use path relative to this script: tests/output
+    # 产物写入 tests/output/<时间戳>/
     base_output = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
     test_out_dir = os.path.join(base_output, str(int(time.time())))
     os.makedirs(test_out_dir, exist_ok=True)
-    
-    # Override global config for this run
-    original_out = config.OUTPUT_DIR
-    config.OUTPUT_DIR = test_out_dir
-    
-    try:
-        # A. Image Generation
-        print(f"\n🎨 [1/4] Generating Image...")
-        image_factory = ImageFactory()
-        img_path = await image_factory._generate_one_image(first_scene)
-        print(f"   ✅ Image: {img_path}")
-        
-        # B. Audio Generation
-        print(f"\n🔊 [2/4] Generating Audio (TTS)...")
-        audio_studio = AudioStudio()
-        await audio_studio._generate_one_audio(first_scene)
-        print(f"   ✅ Audio: {first_scene.audio_path}")
-        
-        # C. Cover Generation
-        print(f"\n🖼️ [3/4] Generating Cover...")
-        video_assembler = VideoAssembler()
-        cover_path = os.path.join(test_out_dir, "cover.png")
-        if video_assembler.generate_cover(img_path, script.topic, cover_path):
-            print(f"   ✅ Cover: {cover_path}")
-        else:
-            print(f"   ❌ Cover Generation Failed")
 
-        # D. Video Assembly (Subtitles check)
-        print(f"\n🎞️ [4/4] Assembling Mini-Video (checking LAYOUT)...")
-        # Initialize video assembler
-        # Pass category to test Book Mode layout if configured in config.yaml
-        print(f"   ℹ️ Testing Category: {category}")
-        
-        final_video_path = video_assembler.assemble_video([first_scene], output_filename="test_video.mp4", topic=script.topic, category=category)
-        
-        # Save the script used
-        if not script_path:
-            save_path = os.path.join(test_out_dir, "script_test.json")
-            script.to_json(save_path)
+    # 覆盖输出目录与当前类目（影响语速/BGM/布局等）
+    original_out = config.OUTPUT_DIR
+    original_cat = getattr(config, "CURRENT_CATEGORY", "")
+    config.OUTPUT_DIR = test_out_dir
+    config.CURRENT_CATEGORY = category
+
+    script: VideoScript | None = None
+
+    try:
+        # 1) 获取脚本：加载或生成
+        if script_path and os.path.exists(script_path):
+            print(f"\n📂 加载已有脚本: {script_path}")
+            script = VideoScript.from_json(script_path)
         else:
-            save_path = os.path.join(test_out_dir, "script_source.json")
-            script.to_json(save_path)
-            
-        print(f"\n✨ End-to-End Test Complete!")
-        print(f"   📂 Output Directory: {test_out_dir}")
-        print(f"   📄 Script: {save_path}")
-        print(f"   🎥 Final Video: {final_video_path}")
-        
-    except Exception as e:
-        print(f"❌ Test Failed: {e}")
-        import traceback
-        traceback.print_exc()
-        
+            if not topic:
+                raise ValueError("未提供 topic，且未指定 --script。")
+            print(f"\n📝 生成脚本: {topic}（类目：{category}）")
+            generator = ScriptGeneratorFactory.get_generator(category)
+            script = generator.generate_script(topic=topic, category=category)
+
+        if not script or not script.scenes:
+            raise RuntimeError("脚本为空或不包含场景。")
+
+        first_scene = script.scenes[0]
+        print(f"\n🎬 使用第 1 幕进行端到端测试: Scene {first_scene.scene_id}")
+        print(f"   - 旁白: {first_scene.narration[:60]}...")
+        print(f"   - 提示词: {first_scene.image_prompt[:60]}...")
+
+        # 2) 生成图片
+        print("\n🎨 [1/3] 生成图片 ...")
+        image_factory = ImageFactory()
+        await image_factory.generate_images([first_scene], force=True)
+        print(f"   ✅ Image: {first_scene.image_path}")
+
+        # 3) 生成音频
+        print("\n🔊 [2/3] 生成配音 ...")
+        audio_studio = AudioStudioFactory.get_studio(category)
+        await audio_studio.generate_audio([first_scene], force=True)
+        print(f"   ✅ Audio: {first_scene.audio_path}")
+
+        # 4) 合成视频（包含封面/字幕/布局/BGM 等逻辑）
+        print("\n🎞️ [3/3] 合成视频 ...")
+        assembler = VideoAssemblerFactory.get_assembler(category)
+        final_video_path = assembler.assemble_video(
+            [first_scene],
+            output_filename="test_video.mp4",
+            topic=script.topic,
+            category=category,
+        )
+        print(f"   ✅ Video: {final_video_path}")
+
+        # 保存脚本快照
+        save_path = os.path.join(test_out_dir, "script_source.json")
+        script.to_json(save_path)
+        print(f"\n📦 输出目录: {test_out_dir}")
+        print(f"📄 脚本: {save_path}")
+
     finally:
         config.OUTPUT_DIR = original_out
+        config.CURRENT_CATEGORY = original_cat
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Integration Test for AutoMaker")
-    parser.add_argument("topic", type=str, nargs='?', help="Topic for the test (optional if --script is used)")
-    parser.add_argument("--script", type=str, help="Path to existing script.json to use")
-    parser.add_argument("--category", type=str, default="成语故事", help="Category to simulate (determines layout movie/book)")
+    parser = argparse.ArgumentParser(description="集成测试：生成 1 幕迷你视频（用于排版/字幕/BGM 检查）")
+    parser.add_argument("topic", type=str, nargs="?", help="视频主题（不传则必须使用 --script）")
+    parser.add_argument("--script", type=str, help="已有 script.json 路径（跳过 LLM 步骤）")
+    parser.add_argument("--category", type=str, default="成语故事", help="模拟类目（影响布局/BGM/语速等）")
     args = parser.parse_args()
-    
+
     asyncio.run(run_test(args.topic, args.script, args.category))
