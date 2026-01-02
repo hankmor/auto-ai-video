@@ -294,17 +294,17 @@ models:
   # 说明：开启 features.enable_hook_voice 后，如果这里命中类目，则优先使用这里的文案；
   # 否则回退到 features.hook_voice_text。
   category_hook_voice:
-    "成语故事": "每日一个成语故事，最后一句是精华。"
-    "睡前故事": "别划走，听完更好睡。"
-    "助眠冥想": "跟我呼吸三次，慢慢放松。"
-    "历史解说": "一分钟讲透关键转折，结尾见。"
-    "儿童绘本": "小朋友准备好了吗？结尾有提问。"
-    "漫画解说": "别眨眼，反转在最后。"
-    "英语绘本": "跟读三遍更标准，结尾一起念。"
-    "神话故事": "开局就炸，最后揭晓真相。"
-    "民间故事": "别急着猜，结尾才有答案。"
-    "少儿百科": "三十秒学一个冷知识，结尾记住要点。"
-    "读书分享": "最后给你一句能用的金句。"
+    "成语故事": "嘘！成语里藏着大秘密，今天我们要抓出哪一个？"
+    "睡前故事": "被窝飞船准备起飞，今晚的目的地是——甜蜜梦乡。"
+    "助眠冥想": "小手放平，闭上眼睛，我们一起去云朵上打个滚儿吧……"
+    "历史解说": "启动时光机！咻—— 抓紧啦，带你穿越回古代去冒险！"
+    "儿童绘本": "画笔有魔法！看，今天的故事从纸上跳出来啦！"
+    "漫画解说": "漫画书变身！最爆笑/精彩的画面，马上开演！"
+    "英语绘本": "Hello! Open the book! 绘本里的小朋友迫不及待想和你说话啦！"
+    "神话故事": "天上有神仙，地上有妖怪？快来打开这个充满魔法的奇幻世界！"
+    "民间故事": "很久很久以前…… 嘿！别睡着，老一辈传下来的智慧故事可精彩啦！"
+    "少儿百科": "你知道这是为什么吗？戴好眼镜，变身科学小博士，出发！"
+    "读书分享": "哇，我发现了一个大宝藏！这本超级好看的书，一定要偷偷告诉你。"
     
 # 功能开关
 features:
@@ -312,11 +312,57 @@ features:
 # 功能开关
   enable_animation: false
   enable_subtitles: true
-  enable_brand_intro: false   # 品牌片头（默认关闭，避免影响前3秒黄金时间）
   enable_brand_outro: true    # 品牌片尾（默认开启，引导关注效果好）
   enable_emotional_tts: false # 情感语音（默认关闭，edge-tts效果有限，保持声音一致性）
-  enable_hook_voice: false    # 片头引导语音（默认关闭）
+  enable_hook_voice: false   # 关闭内置片头：不再生成/插入 hook 片头（你将自行制作片头视频+音频）
   hook_voice_text: ""         # 默认引导文案；为空则仅在 models.category_hook_voice 命中时才会播放
+  hook_intro_pause: 0.0       # 片头结束后的停顿秒数（内置片头已关闭）
+  hook_intro_flip: 0.0        # 翻书转场时长（内置片头已关闭）
+  hook_intro_bg_mode: "black" # brand=使用 brand_intro.png；black=纯黑底（更抓注意力）
+  hook_intro_sfx_path: "assets/sfx/whoosh.mp3" # 片头入场音效（可为空）
+  hook_intro_sfx_volume: 0.5  # 片头音效音量（0~1）
+  hook_intro_sfx_start: 0.22  # 音效起始时间（秒）
+  hook_intro_sfx_trim_start: 0.08 # 从音效的哪个时间点开始截取（秒）——避开最刺耳的起音
+  hook_intro_sfx_trim_end: 0.45   # 截取到哪个时间点（秒），<=0 表示到结尾（建议 0.35~0.6）
+  hook_intro_sfx_fade_in: 0.02    # 淡入（秒）
+  hook_intro_sfx_fade_out: 0.08   # 淡出（秒）
+
+  # 片头吉祥物（绘宝）动画：在 brand_intro.png 上叠加“弹入 + 漂浮 + 眨眼”
+  enable_mascot_intro: false  # 关闭内置片头绘宝动画（你将自行制作片头视频）
+  mascot_intro_path: "assets/image/mascot_huibao_transparent.png"
+  mascot_intro_blink_path: "assets/image/mascot_huibao_blink_transparent.png"
+  mascot_intro_scale: 0.60          # 吉祥物宽度占画面宽度比例（你要求至少 60%）
+  mascot_intro_x: 0.62              # 吉祥物左上角 x 位置比例（0~1）
+  mascot_intro_y: 0.63              # 吉祥物左上角 y 位置比例（0~1）
+  mascot_intro_entry: 0.7           # 弹入时长（秒）
+  mascot_intro_float: 10            # 漂浮幅度（像素）
+  mascot_intro_blink_interval: 2.2  # 眨眼间隔（秒）
+  mascot_intro_blink_dur: 0.12      # 单次眨眼持续（秒）
+  mascot_intro_show_name: false     # 是否在片头显示“绘宝”名牌（默认不显示，避免画面拥挤）
+
+  # 绘宝“分段出场”动画（强表演版）
+  # 1) 左侧中部探头 + 眨眼 2 次（总 1 秒）
+  # 2) 停 0.5 秒后，全身从左侧跳到屏幕中间站好
+  # 3) 再停 0.2 秒后开始朗读 hook，并在朗读期间做“讲解动作”（整体轻摆/点头）
+  mascot_stage1_dur: 1.0
+  mascot_stage1_blinks: 2
+  mascot_stage1_blink_dur: 0.10
+  mascot_stage2_pause: 0.5
+  mascot_stage2_dur: 0.6
+  mascot_stage2_jump: 0.10
+  mascot_stage3_pause: 0.2
+  mascot_gesture_rot_deg: 6.0
+  mascot_gesture_freq: 2.0
+  mascot_gesture_shift: 0.008
+  mascot_gesture_bob: 0.006
+
+  # “探头”裁剪框：从全身透明 PNG 里裁一块当脑袋用，格式 [x, y, w, h]
+  # - 全部 <= 1 时按比例裁剪（推荐）；>1 时按像素裁剪
+  mascot_head_crop: [0.10, 0.02, 0.78, 0.60]
+  mascot_head_scale: 0.55
+  mascot_head_x: 0.06
+  mascot_head_y: 0.44
+  mascot_body_center_y: 0.58
 
 # API 密钥和凭证
 # 推荐：将这些设置为环境变量（例如 export ARK_API_KEY=...）

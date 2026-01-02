@@ -6,7 +6,7 @@ from moviepy.editor import ImageClip, CompositeVideoClip
 from config.config import config
 from model.models import Scene
 from util.logger import logger
-from steps.image.font_manager import font_manager
+from steps.image.font import font_manager
 from steps.video.base import VideoAssemblerBase
 
 class BookVideoAssembler(VideoAssemblerBase):
