@@ -20,6 +20,7 @@ from moviepy.editor import (
 from moviepy.audio.AudioClip import CompositeAudioClip
 import moviepy.audio.fx.all as afx
 import moviepy.video.fx.all as vfx
+import subprocess
 
 from config.config import config
 from model.models import Scene
@@ -538,38 +539,100 @@ class VideoAssemblerBase(ABC):
                     title_audio_path = os.path.join(
                         config.OUTPUT_DIR, "title_audio.mp3"
                     )
-                    import subprocess
+                    # 片头引导语音（Hook）：可按类目覆盖
+                    hook_text = ""
+                    if hasattr(config, "ENABLE_HOOK_VOICE") and config.ENABLE_HOOK_VOICE:
+                        if (
+                            hasattr(config, "CATEGORY_HOOK_VOICE_TEXT")
+                            and category
+                            and category in config.CATEGORY_HOOK_VOICE_TEXT
+                        ):
+                            hook_text = (
+                                config.CATEGORY_HOOK_VOICE_TEXT.get(category) or ""
+                            ).strip()
+                        if not hook_text and hasattr(config, "HOOK_VOICE_TEXT"):
+                            hook_text = (config.HOOK_VOICE_TEXT or "").strip()
 
-                    cmd = [
-                        "edge-tts",
-                        "--text",
-                        topic,
-                        "--write-media",
-                        title_audio_path,
-                        "--voice",
-                        config.TTS_VOICE_TITLE,
-                    ]
-                    subprocess.run(
-                        cmd,
-                        check=True,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
+                    hook_audio_path = os.path.join(config.OUTPUT_DIR, "hook_audio.mp3")
+                    if hook_text and not os.path.exists(hook_audio_path):
+                        cmd_hook = [
+                            "edge-tts",
+                            "--text",
+                            hook_text,
+                            "--write-media",
+                            hook_audio_path,
+                            "--voice",
+                            config.TTS_VOICE_TITLE,
+                        ]
+                        subprocess.run(
+                            cmd_hook,
+                            check=True,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+
+                    # 标题语音（不存在才生成，避免重复开销）
+                    if not os.path.exists(title_audio_path):
+                        cmd_title = [
+                            "edge-tts",
+                            "--text",
+                            topic,
+                            "--write-media",
+                            title_audio_path,
+                            "--voice",
+                            config.TTS_VOICE_TITLE,
+                        ]
+                        subprocess.run(
+                            cmd_title,
+                            check=True,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+
+                    hook_audio_clip = (
+                        AudioFileClip(hook_audio_path)
+                        if hook_text and os.path.exists(hook_audio_path)
+                        else None
+                    )
+                    title_audio_clip = (
+                        AudioFileClip(title_audio_path)
+                        if os.path.exists(title_audio_path)
+                        else None
                     )
 
-                    if os.path.exists(title_audio_path):
-                        title_audio_clip = AudioFileClip(title_audio_path)
-                        silence_pre, silence_post = 0.5, 1.0
-                        total_duration = max(
-                            silence_pre + title_audio_clip.duration + silence_post, 2.0
-                        )
+                    if title_audio_clip or hook_audio_clip:
+                        silence_pre = 0.4
+                        silence_between = 0.2
+                        silence_post = 1.0
+
+                        hook_start = silence_pre
+                        title_start = silence_pre
+                        audio_tracks = []
+                        total_audio_end = 0.0
+
+                        if hook_audio_clip:
+                            audio_tracks.append(hook_audio_clip.set_start(hook_start))
+                            total_audio_end = max(
+                                total_audio_end,
+                                hook_start + hook_audio_clip.duration,
+                            )
+                            title_start = (
+                                hook_start + hook_audio_clip.duration + silence_between
+                            )
+
+                        if title_audio_clip:
+                            audio_tracks.append(title_audio_clip.set_start(title_start))
+                            total_audio_end = max(
+                                total_audio_end,
+                                title_start + title_audio_clip.duration,
+                            )
+
+                        total_duration = max(total_audio_end + silence_post, 2.0)
                         if trans_duration > 0:
                             total_duration += trans_duration
 
                         cover_clip = ImageClip(cover_path).set_duration(total_duration)
-                        final_audio = CompositeAudioClip(
-                            [title_audio_clip.set_start(silence_pre)]
-                        )
-                        cover_clip = cover_clip.set_audio(final_audio)
+                        cover_clip = cover_clip.set_audio(CompositeAudioClip(audio_tracks))
                         clips.append(cover_clip)
                         bgm_start_time = total_duration
                     else:

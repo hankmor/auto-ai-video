@@ -92,21 +92,24 @@ python main.py --topic "The Lion and the Mouse" --category en --voice en-US-AnaN
 
 ## 常用参数（CLI）
 
-- **`--topic`**：主题（支持 `标题:副标题`；也支持 `封面标题|上下文标题` 的高级写法）
+- **`--topic`**：主题内容（给 AI 理解用）
+- **`--title`**：封面主标题（可选；不填则使用 `--topic` 原文）
+- **`--subtitle`**：脚本副标题/章节（可选；不填则不处理子标题）
+- **`--cover-subtitle`**：封面小标题（可选；不填则不处理子标题）
 - **`--category`**：类目/系列（支持别名，见 `config.yaml` 的 `models.category_aliases`）
 - **`--style`**：覆盖画风（风格键或自定义提示词）
 - **`--voice`**：覆盖 TTS 语音（否则按类目语音池随机）
-- **`--subtitles` / `-sb`**：开启字幕（中文自动拼音）
+- **`--subtitles`**：开启字幕（中文自动拼音）
 - **`--step`**：分步执行：`script | image | animate | audio | video | all`
 - **`--force`**：强制重新生成（即使已存在中间产物）
 
 ## 分步运行（调试/可控生产）
 
 ```bash
-python main.py --topic "小狗钱钱:第一章" --category db --step script
-python main.py --topic "小狗钱钱:第一章" --category db --step image
-python main.py --topic "小狗钱钱:第一章" --category db --step audio
-python main.py --topic "小狗钱钱:第一章" --category db --step video
+python main.py --topic "小狗钱钱第一版 第一章 一只白色的拉布拉多犬" --title "小狗钱钱" --cover-subtitle "一、白色拉布拉多犬" --category db --step script
+python main.py --topic "小狗钱钱第一版 第一章 一只白色的拉布拉多犬" --title "小狗钱钱" --cover-subtitle "一、白色拉布拉多犬" --category db --step image
+python main.py --topic "小狗钱钱第一版 第一章 一只白色的拉布拉多犬" --title "小狗钱钱" --cover-subtitle "一、白色拉布拉多犬" --category db --step audio
+python main.py --topic "小狗钱钱第一版 第一章 一只白色的拉布拉多犬" --title "小狗钱钱" --cover-subtitle "一、白色拉布拉多犬" --category db --step video
 ```
 
 > 脚本会落到当前作品目录下的 `script.json`，你可以手动修改后再继续生成后续步骤。
@@ -116,10 +119,11 @@ python main.py --topic "小狗钱钱:第一章" --category db --step video
 主流程输出默认在：
 
 ```
-products/<类目>/<主题>/
+<output_dir>/<类目>/<主题>/
   script.json
   script.md
   cover.png
+  hook_audio.mp3（如开启片头引导语音）
   title_audio.mp3
   scene_*.png / scene_*.mp3 / scene_*.mp4（视配置而定）
   final_video.mp4

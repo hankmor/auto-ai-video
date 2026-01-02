@@ -89,7 +89,10 @@ python main.py --topic "三国演义" --category ls --style pixar --voice zh-CN-
 
 ## 🛠️ 参数说明
 
-- `--topic`: 视频主题 (必填)
+- `--topic`: 主题内容（给 AI 理解用）(必填)
+- `--title`: 封面主标题（可选；不填则使用 `--topic` 原文）
+- `--subtitle`: 脚本副标题/章节（可选；不填则不处理子标题）
+- `--cover-subtitle`: 封面小标题（可选；不填则不处理子标题）
 - `--category`: 分类 (决定画风、配音池、BGM、布局)。支持缩写：见 `config.yaml` 的 `models.category_aliases`（例如 `cy/en/db` 等）。
 - `--subtitles`: 开启字幕 (中文会自动加拼音)。
 - `--style`: 强制指定画风 (覆盖分类默认)。
@@ -101,7 +104,7 @@ python main.py --topic "三国演义" --category ls --style pixar --voice zh-CN-
 
 ### 4. 分步调试 (Step-by-Step)
 
-支持通过 `--step` 参数分步执行，方便调试或进行精细化控制。中间状态会保存到当前作品目录下的 `script.json`（默认输出在 `products/<类目>/<主题>/`）。
+支持通过 `--step` 参数分步执行，方便调试或进行精细化控制。中间状态会保存到当前作品目录下的 `script.json`（默认输出在 `<output_dir>/<类目>/<主题>/`，其中 `output_dir` 来自 `config.yaml` 的 `project.output_dir`）。
 
 ```bash
 # 1. 生成剧本

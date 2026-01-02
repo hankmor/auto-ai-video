@@ -289,6 +289,22 @@ models:
     "民间故事": "crossfade"
     "少儿百科": "none"
     "读书分享": "none"
+
+  # 片头引导语音文案（可选）：按类目覆盖
+  # 说明：开启 features.enable_hook_voice 后，如果这里命中类目，则优先使用这里的文案；
+  # 否则回退到 features.hook_voice_text。
+  category_hook_voice:
+    "成语故事": "每日一个成语故事，最后一句是精华。"
+    "睡前故事": "别划走，听完更好睡。"
+    "助眠冥想": "跟我呼吸三次，慢慢放松。"
+    "历史解说": "一分钟讲透关键转折，结尾见。"
+    "儿童绘本": "小朋友准备好了吗？结尾有提问。"
+    "漫画解说": "别眨眼，反转在最后。"
+    "英语绘本": "跟读三遍更标准，结尾一起念。"
+    "神话故事": "开局就炸，最后揭晓真相。"
+    "民间故事": "别急着猜，结尾才有答案。"
+    "少儿百科": "三十秒学一个冷知识，结尾记住要点。"
+    "读书分享": "最后给你一句能用的金句。"
     
 # 功能开关
 features:
@@ -299,6 +315,8 @@ features:
   enable_brand_intro: false   # 品牌片头（默认关闭，避免影响前3秒黄金时间）
   enable_brand_outro: true    # 品牌片尾（默认开启，引导关注效果好）
   enable_emotional_tts: false # 情感语音（默认关闭，edge-tts效果有限，保持声音一致性）
+  enable_hook_voice: false    # 片头引导语音（默认关闭）
+  hook_voice_text: ""         # 默认引导文案；为空则仅在 models.category_hook_voice 命中时才会播放
 
 # API 密钥和凭证
 # 推荐：将这些设置为环境变量（例如 export ARK_API_KEY=...）

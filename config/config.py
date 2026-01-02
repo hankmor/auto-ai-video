@@ -1,6 +1,7 @@
 import os
 import yaml
 from dataclasses import dataclass, field
+from util.logger import logger
 
 @dataclass
 class Config:
@@ -63,17 +64,36 @@ class Config:
     ENABLE_BRAND_INTRO: bool = False   # 品牌片头
     ENABLE_BRAND_OUTRO: bool = True    # 品牌片尾
     ENABLE_EMOTIONAL_TTS: bool = False # 情感语音
+    # 片头引导语音（Hook）：封面/标题语音前播放一段引导语
+    ENABLE_HOOK_VOICE: bool = False
+    HOOK_VOICE_TEXT: str = ""
+    CATEGORY_HOOK_VOICE_TEXT: dict = field(default_factory=dict)  # 映射：category -> hook_text
 
     # 字体设置
     FONTS: dict = field(default_factory=dict)
 
-    def load_from_yaml(self, path: str = "config.yaml"):
-        if not os.path.exists(path):
+    # 内部缓存：避免重复打开/解析 config.yaml
+    _yaml_path: str = field(default="config.yaml", init=False, repr=False)
+    _yaml_data: dict | None = field(default=None, init=False, repr=False)
+
+    def _ensure_yaml_loaded(self):
+        if self._yaml_data is not None:
             return
-        
-        with open(path, 'r', encoding='utf-8') as f:
-            data = yaml.safe_load(f)
-            
+        if os.path.exists(self._yaml_path):
+            try:
+                with open(self._yaml_path, "r", encoding="utf-8") as f:
+                    self._yaml_data = yaml.safe_load(f) or {}
+            except Exception as e:
+                logger.warning(f"读取配置文件失败：{self._yaml_path}，错误：{e}")
+                self._yaml_data = {}
+        else:
+            self._yaml_data = {}
+
+    def load_from_yaml(self, path: str = "config.yaml"):
+        self._yaml_path = path
+        self._yaml_data = None
+        self._ensure_yaml_loaded()
+        data = self._yaml_data or {}
         if not data:
             return
 
@@ -109,6 +129,7 @@ class Config:
             
             self.CATEGORY_ALIASES = data["models"].get("category_aliases", {}) # 加载别名
             self.CATEGORY_LAYOUTS = data["models"].get("category_layouts", {}) # 加载布局
+            self.CATEGORY_HOOK_VOICE_TEXT = data["models"].get("category_hook_voice", {})
             self.ANIMATOR_TYPE = data["models"].get("animator", self.ANIMATOR_TYPE)
             self.TTS_VOICE = data["models"].get("tts_voice", self.TTS_VOICE)
             self.TTS_VOICE_TITLE = data["models"].get("tts_voice_title", self.TTS_VOICE) # 如果未设置，则默认为主语音
@@ -138,29 +159,19 @@ class Config:
             self.ENABLE_BRAND_INTRO = data["features"].get("enable_brand_intro", self.ENABLE_BRAND_INTRO)
             self.ENABLE_BRAND_OUTRO = data["features"].get("enable_brand_outro", self.ENABLE_BRAND_OUTRO)
             self.ENABLE_EMOTIONAL_TTS = data["features"].get("enable_emotional_tts", self.ENABLE_EMOTIONAL_TTS)
+            self.ENABLE_HOOK_VOICE = data["features"].get("enable_hook_voice", self.ENABLE_HOOK_VOICE)
+            self.HOOK_VOICE_TEXT = data["features"].get("hook_voice_text", self.HOOK_VOICE_TEXT)
     
     def get_speech_rate(self, category: str) -> str:
         """获取指定类目的语速配置，默认-15%"""
         if not hasattr(self, '_category_speech_rates'):
-            # 加载语速配置
-            self._category_speech_rates = {}
-            if os.path.exists("config.yaml"):
-                try:
-                    with open("config.yaml", 'r', encoding='utf-8') as f:
-                        data = yaml.safe_load(f)
-                        # 从 models 节点读取 category_speech_rates
-                        if data and "models" in data:
-                            self._category_speech_rates = data["models"].get("category_speech_rates", {})
-                            # 调试日志
-                            from auto_maker.utils import logger
-                            logger.debug(f"Loaded speech rates: {self._category_speech_rates}")
-                except Exception as e:
-                    from auto_maker.utils import logger
-                    logger.warning(f"Failed to load speech rates: {e}")
+            self._ensure_yaml_loaded()
+            models = (self._yaml_data or {}).get("models", {}) if self._yaml_data else {}
+            self._category_speech_rates = models.get("category_speech_rates", {}) or {}
+            logger.debug(f"已加载语速配置：{self._category_speech_rates}")
         
         rate = self._category_speech_rates.get(category, "-15%")
-        from auto_maker.utils import logger
-        logger.info(f"🎵 Speech rate for '{category}': {rate}")
+        logger.info(f"类目语速：{category} -> {rate}")
         return rate
 
 
@@ -182,25 +193,18 @@ class Config:
                 'default_max': 24,
                 'category_overrides': {}
             }
-            if os.path.exists("config.yaml"):
-                try:
-                    with open("config.yaml", 'r', encoding='utf-8') as f:
-                        data = yaml.safe_load(f)
-                        if data and "models" in data:
-                            scene_count = data["models"].get("scene_count", {})
-                            self._scene_count_config['default_min'] = scene_count.get('min', 18)
-                            self._scene_count_config['default_max'] = scene_count.get('max', 24)
-                            
-                            # 加载分类特定配置
-                            category_scene_count = data["models"].get("category_scene_count", {})
-                            for cat, range_config in category_scene_count.items():
-                                self._scene_count_config['category_overrides'][cat] = (
-                                    range_config.get('min', 18),
-                                    range_config.get('max', 24)
-                                )
-                except Exception as e:
-                    from auto_maker.utils import logger
-                    logger.warning(f"Failed to load scene count config: {e}")
+            self._ensure_yaml_loaded()
+            models = (self._yaml_data or {}).get("models", {}) if self._yaml_data else {}
+            scene_count = models.get("scene_count", {}) or {}
+            self._scene_count_config['default_min'] = scene_count.get('min', 18)
+            self._scene_count_config['default_max'] = scene_count.get('max', 24)
+
+            category_scene_count = models.get("category_scene_count", {}) or {}
+            for cat, range_config in category_scene_count.items():
+                self._scene_count_config['category_overrides'][cat] = (
+                    range_config.get('min', 18),
+                    range_config.get('max', 24)
+                )
         
         # 如果有特定类目的配置，优先使用
         if category and category in self._scene_count_config['category_overrides']:
