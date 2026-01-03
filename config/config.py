@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass, field
 from util.logger import logger
-from typing import Optional
+from typing import Optional, List, Union
 
 try:
     import yaml  # type: ignore
@@ -66,61 +66,15 @@ class Config:
     # 功能标志
     ENABLE_ANIMATION: bool = True
     ENABLE_SUBTITLES: bool = False
-    ENABLE_BRAND_OUTRO: bool = True    # 品牌片尾
-    ENABLE_EMOTIONAL_TTS: bool = False # 情感语音
-    # 片头引导语音（Hook）：封面/标题语音前播放一段引导语
-    ENABLE_HOOK_VOICE: bool = False
-    HOOK_VOICE_TEXT: str = ""
-    CATEGORY_HOOK_VOICE_TEXT: dict = field(default_factory=dict)  # 映射：category -> hook_text
-    HOOK_INTRO_PAUSE: float = 0.25
-    HOOK_INTRO_FLIP: float = 0.6
-    HOOK_INTRO_BG_MODE: str = "brand"  # brand / black
-    HOOK_INTRO_SFX_PATH: str = "assets/sfx/whoosh.mp3"
-    HOOK_INTRO_SFX_VOLUME: float = 0.5
-    HOOK_INTRO_SFX_START: float = 0.22  # 音效起始时间（秒），略晚于画面出现更舒服
-    HOOK_INTRO_SFX_TRIM_START: float = 0.08  # 从音效的哪个时间点开始截取（秒）
-    HOOK_INTRO_SFX_TRIM_END: float = 0.45    # 截取到哪个时间点（秒），<=0 表示到结尾
-    HOOK_INTRO_SFX_FADE_IN: float = 0.02     # 淡入（秒）
-    HOOK_INTRO_SFX_FADE_OUT: float = 0.08    # 淡出（秒）
-    
-    # 片头吉祥物（绘宝）动画：在 brand_intro.png 上叠加“弹入 + 漂浮 + 眨眼”
-    ENABLE_MASCOT_INTRO: bool = True
-    MASCOT_INTRO_PATH: str = "assets/image/mascot_huibao_transparent.png"
-    MASCOT_INTRO_BLINK_PATH: str = "assets/image/mascot_huibao_blink_transparent.png"
-    MASCOT_INTRO_SCALE: float = 0.42          # 吉祥物宽度占画面宽度比例
-    MASCOT_INTRO_X: float = 0.62              # 吉祥物左上角 x 位置比例（0~1）
-    MASCOT_INTRO_Y: float = 0.63              # 吉祥物左上角 y 位置比例（0~1）
-    MASCOT_INTRO_ENTRY: float = 0.7           # 弹入时长（秒）
-    MASCOT_INTRO_FLOAT: float = 10.0          # 漂浮幅度（像素）
-    MASCOT_INTRO_BLINK_INTERVAL: float = 2.2  # 眨眼间隔（秒）
-    MASCOT_INTRO_BLINK_DUR: float = 0.12      # 单次眨眼持续（秒）
-    MASCOT_INTRO_SHOW_NAME: bool = False      # 是否在片头显示“绘宝”名牌（默认不显示）
-    
-    # 绘宝“分段出场”动画（用于 hook 片头的更强表演）
-    # 目标：
-    # 1) 先从左侧中部弹出脑袋并眨眼（1s）
-    # 2) 停 0.5s 后全身从左侧跳入到屏幕中间
-    # 3) 再停 0.2s 后开始朗读 hook，并在朗读期间做“讲解动作”（轻微摆动/点头）
-    MASCOT_STAGE1_DUR: float = 1.0
-    MASCOT_STAGE1_BLINKS: int = 2
-    MASCOT_STAGE1_BLINK_DUR: float = 0.10
-    MASCOT_STAGE2_PAUSE: float = 0.5
-    MASCOT_STAGE2_DUR: float = 0.6
-    MASCOT_STAGE2_JUMP: float = 0.10  # 跳跃高度（相对屏幕高度比例）
-    MASCOT_STAGE3_PAUSE: float = 0.2
-    MASCOT_GESTURE_ROT_DEG: float = 6.0   # 讲解时摆动角度（度）
-    MASCOT_GESTURE_FREQ: float = 2.0      # 讲解时摆动频率（Hz）
-    MASCOT_GESTURE_SHIFT: float = 0.008   # 讲解时左右轻移（相对屏幕宽度比例）
-    MASCOT_GESTURE_BOB: float = 0.006     # 讲解时上下轻摆（相对屏幕高度比例）
-    
-    # 脑袋裁剪（从全身图里裁一块当“脑袋”用），格式：[x, y, w, h]
-    # - 如果数值都 <=1：按比例裁剪（推荐）
-    # - 如果存在 >1：按像素裁剪
-    MASCOT_HEAD_CROP: list = field(default_factory=lambda: [0.10, 0.02, 0.78, 0.60])
-    MASCOT_HEAD_SCALE: float = 0.40  # 脑袋宽度占屏幕宽度比例
-    MASCOT_HEAD_X: float = 0.06      # 脑袋目标位置（左上角）x 比例
-    MASCOT_HEAD_Y: float = 0.36      # 脑袋目标位置（左上角）y 比例
-    MASCOT_BODY_CENTER_Y: float = 0.58  # 全身站立中心 y（屏幕高度比例）
+    ENABLE_BRAND_OUTRO: bool = True  # 品牌片尾
+    ENABLE_EMOTIONAL_TTS: bool = False  # 情感语音
+
+    # 自定义视频片头
+    ENABLE_CUSTOM_INTRO: bool = False
+    CUSTOM_INTRO_VIDEO_PATH: Union[str, List[str]] = "assets/videos/intro.mp4"
+    CATEGORY_INTROS: dict = field(default_factory=dict)
+    CUSTOM_INTRO_TRANSITION: str = "crossfade"
+    CUSTOM_INTRO_TRANSITION_DURATION: float = 0.8
 
     # 字体设置
     FONTS: dict = field(default_factory=dict)
@@ -185,11 +139,14 @@ class Config:
             self.CATEGORY_DEFAULTS = data["models"].get("category_defaults", {})
             self.CATEGORY_VOICES = data["models"].get("category_voices", {})
             self.CATEGORY_BGM = data["models"].get("category_bgm", {})
-            self.CATEGORY_STYLES = data["models"].get("category_styles", {}) # 回退
-            
-            self.CATEGORY_ALIASES = data["models"].get("category_aliases", {}) # 加载别名
-            self.CATEGORY_LAYOUTS = data["models"].get("category_layouts", {}) # 加载布局
-            self.CATEGORY_HOOK_VOICE_TEXT = data["models"].get("category_hook_voice", {})
+            self.CATEGORY_STYLES = data["models"].get("category_styles", {})  # 回退
+
+            self.CATEGORY_ALIASES = data["models"].get(
+                "category_aliases", {}
+            )  # 加载别名
+            self.CATEGORY_LAYOUTS = data["models"].get(
+                "category_layouts", {}
+            )  # 加载布局
             self.ANIMATOR_TYPE = data["models"].get("animator", self.ANIMATOR_TYPE)
             self.TTS_VOICE = data["models"].get("tts_voice", self.TTS_VOICE)
             self.TTS_VOICE_TITLE = data["models"].get("tts_voice_title", self.TTS_VOICE) # 如果未设置，则默认为主语音
@@ -217,53 +174,29 @@ class Config:
             self.ENABLE_ANIMATION = data["features"].get("enable_animation", self.ENABLE_ANIMATION)
             self.ENABLE_SUBTITLES = data["features"].get("enable_subtitles", self.ENABLE_SUBTITLES)
             self.ENABLE_BRAND_OUTRO = data["features"].get("enable_brand_outro", self.ENABLE_BRAND_OUTRO)
-            self.ENABLE_EMOTIONAL_TTS = data["features"].get("enable_emotional_tts", self.ENABLE_EMOTIONAL_TTS)
-            self.ENABLE_HOOK_VOICE = data["features"].get("enable_hook_voice", self.ENABLE_HOOK_VOICE)
-            self.HOOK_VOICE_TEXT = data["features"].get("hook_voice_text", self.HOOK_VOICE_TEXT)
-            self.HOOK_INTRO_PAUSE = float(data["features"].get("hook_intro_pause", self.HOOK_INTRO_PAUSE))
-            self.HOOK_INTRO_FLIP = float(data["features"].get("hook_intro_flip", self.HOOK_INTRO_FLIP))
-            self.HOOK_INTRO_BG_MODE = str(data["features"].get("hook_intro_bg_mode", self.HOOK_INTRO_BG_MODE) or "brand")
-            self.HOOK_INTRO_SFX_PATH = str(data["features"].get("hook_intro_sfx_path", self.HOOK_INTRO_SFX_PATH) or "")
-            self.HOOK_INTRO_SFX_VOLUME = float(data["features"].get("hook_intro_sfx_volume", self.HOOK_INTRO_SFX_VOLUME))
-            self.HOOK_INTRO_SFX_START = float(data["features"].get("hook_intro_sfx_start", self.HOOK_INTRO_SFX_START))
-            self.HOOK_INTRO_SFX_TRIM_START = float(data["features"].get("hook_intro_sfx_trim_start", self.HOOK_INTRO_SFX_TRIM_START))
-            self.HOOK_INTRO_SFX_TRIM_END = float(data["features"].get("hook_intro_sfx_trim_end", self.HOOK_INTRO_SFX_TRIM_END))
-            self.HOOK_INTRO_SFX_FADE_IN = float(data["features"].get("hook_intro_sfx_fade_in", self.HOOK_INTRO_SFX_FADE_IN))
-            self.HOOK_INTRO_SFX_FADE_OUT = float(data["features"].get("hook_intro_sfx_fade_out", self.HOOK_INTRO_SFX_FADE_OUT))
-            
-            # 吉祥物片头动画（可选）
-            self.ENABLE_MASCOT_INTRO = bool(data["features"].get("enable_mascot_intro", self.ENABLE_MASCOT_INTRO))
-            self.MASCOT_INTRO_PATH = data["features"].get("mascot_intro_path", self.MASCOT_INTRO_PATH)
-            self.MASCOT_INTRO_BLINK_PATH = data["features"].get("mascot_intro_blink_path", self.MASCOT_INTRO_BLINK_PATH)
-            self.MASCOT_INTRO_SCALE = float(data["features"].get("mascot_intro_scale", self.MASCOT_INTRO_SCALE))
-            self.MASCOT_INTRO_X = float(data["features"].get("mascot_intro_x", self.MASCOT_INTRO_X))
-            self.MASCOT_INTRO_Y = float(data["features"].get("mascot_intro_y", self.MASCOT_INTRO_Y))
-            self.MASCOT_INTRO_ENTRY = float(data["features"].get("mascot_intro_entry", self.MASCOT_INTRO_ENTRY))
-            self.MASCOT_INTRO_FLOAT = float(data["features"].get("mascot_intro_float", self.MASCOT_INTRO_FLOAT))
-            self.MASCOT_INTRO_BLINK_INTERVAL = float(data["features"].get("mascot_intro_blink_interval", self.MASCOT_INTRO_BLINK_INTERVAL))
-            self.MASCOT_INTRO_BLINK_DUR = float(data["features"].get("mascot_intro_blink_dur", self.MASCOT_INTRO_BLINK_DUR))
-            self.MASCOT_INTRO_SHOW_NAME = bool(data["features"].get("mascot_intro_show_name", self.MASCOT_INTRO_SHOW_NAME))
-            
-            # 绘宝分段出场（可选）
-            self.MASCOT_STAGE1_DUR = float(data["features"].get("mascot_stage1_dur", self.MASCOT_STAGE1_DUR))
-            self.MASCOT_STAGE1_BLINKS = int(data["features"].get("mascot_stage1_blinks", self.MASCOT_STAGE1_BLINKS))
-            self.MASCOT_STAGE1_BLINK_DUR = float(data["features"].get("mascot_stage1_blink_dur", self.MASCOT_STAGE1_BLINK_DUR))
-            self.MASCOT_STAGE2_PAUSE = float(data["features"].get("mascot_stage2_pause", self.MASCOT_STAGE2_PAUSE))
-            self.MASCOT_STAGE2_DUR = float(data["features"].get("mascot_stage2_dur", self.MASCOT_STAGE2_DUR))
-            self.MASCOT_STAGE2_JUMP = float(data["features"].get("mascot_stage2_jump", self.MASCOT_STAGE2_JUMP))
-            self.MASCOT_STAGE3_PAUSE = float(data["features"].get("mascot_stage3_pause", self.MASCOT_STAGE3_PAUSE))
-            self.MASCOT_GESTURE_ROT_DEG = float(data["features"].get("mascot_gesture_rot_deg", self.MASCOT_GESTURE_ROT_DEG))
-            self.MASCOT_GESTURE_FREQ = float(data["features"].get("mascot_gesture_freq", self.MASCOT_GESTURE_FREQ))
-            self.MASCOT_GESTURE_SHIFT = float(data["features"].get("mascot_gesture_shift", self.MASCOT_GESTURE_SHIFT))
-            self.MASCOT_GESTURE_BOB = float(data["features"].get("mascot_gesture_bob", self.MASCOT_GESTURE_BOB))
-            # 切脑袋/站位（允许 YAML 覆盖）
-            hc = data["features"].get("mascot_head_crop", self.MASCOT_HEAD_CROP)
-            if isinstance(hc, (list, tuple)) and len(hc) == 4:
-                self.MASCOT_HEAD_CROP = list(hc)
-            self.MASCOT_HEAD_SCALE = float(data["features"].get("mascot_head_scale", self.MASCOT_HEAD_SCALE))
-            self.MASCOT_HEAD_X = float(data["features"].get("mascot_head_x", self.MASCOT_HEAD_X))
-            self.MASCOT_HEAD_Y = float(data["features"].get("mascot_head_y", self.MASCOT_HEAD_Y))
-            self.MASCOT_BODY_CENTER_Y = float(data["features"].get("mascot_body_center_y", self.MASCOT_BODY_CENTER_Y))
+            self.ENABLE_EMOTIONAL_TTS = data["features"].get(
+                "enable_emotional_tts", self.ENABLE_EMOTIONAL_TTS
+            )
+
+            # 自定义视频片头
+            self.ENABLE_CUSTOM_INTRO = bool(
+                data["features"].get("enable_custom_intro", self.ENABLE_CUSTOM_INTRO)
+            )
+            self.CUSTOM_INTRO_VIDEO_PATH = data["features"].get(
+                "custom_intro_video_path", self.CUSTOM_INTRO_VIDEO_PATH
+            )
+            self.CATEGORY_INTROS = data["features"].get(
+                "category_intros", self.CATEGORY_INTROS
+            )
+            self.CUSTOM_INTRO_TRANSITION = data["features"].get(
+                "custom_intro_transition", self.CUSTOM_INTRO_TRANSITION
+            )
+            self.CUSTOM_INTRO_TRANSITION_DURATION = float(
+                data["features"].get(
+                    "custom_intro_transition_duration",
+                    self.CUSTOM_INTRO_TRANSITION_DURATION,
+                )
+            )
     
     def get_speech_rate(self, category: str) -> str:
         """获取指定类目的语速配置，默认-15%"""

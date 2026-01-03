@@ -42,3 +42,4 @@ output/
 # But config.yaml is the main config. Let's ignore it if it contains keys, or assume user manages it.
 # Given it has keys now, better ignore it.
 .DS_Store
+assets/videos
