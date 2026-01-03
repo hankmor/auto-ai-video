@@ -16,34 +16,11 @@ def main():
     from util.logger import logger
     from steps import step
 
-    # 解析主题/副标题（兼容：既支持 --subtitle，也支持在 --topic 里用冒号写章节）
     raw_topic = (args.topic or "").strip()
     main_topic = raw_topic
     subtitle = (args.subtitle or "").strip()
-
-    if not subtitle:
-        # 支持中文冒号和英文冒号
-        if "：" in raw_topic:
-            parts = raw_topic.split("：", 1)
-            main_topic = parts[0].strip()
-            subtitle = parts[1].strip()
-        elif ":" in raw_topic:
-            parts = raw_topic.split(":", 1)
-            main_topic = parts[0].strip()
-            subtitle = parts[1].strip()
-
-    # 解析封面标题 vs 上下文主题（例如：小狗钱钱|小狗钱钱(少儿版)）
-    # cover_title：用于封面/视频标题；context_topic：用于脚本生成时给 LLM 的上下文
     cover_title = (args.title or "").strip()
     context_topic = main_topic
-
-    if "|" in main_topic:
-        parts = main_topic.split("|", 1)
-        main_topic = parts[0].strip()
-        context_topic = parts[1].strip() or main_topic
-        logger.info(
-            f"📘 主题解析：封面标题='{main_topic}'，上下文主题='{context_topic}'"
-        )
 
     if not cover_title:
         cover_title = main_topic
@@ -54,30 +31,36 @@ def main():
 
     # 目录使用“干净主题 + 副标题”以隔离不同章节产物
     clean_full_topic = f"{main_topic}:{subtitle}" if subtitle else main_topic
-    config.setup(args.category, clean_full_topic, args.style, args.subtitles, args.voice)
+    config.setup(
+        category=args.category,
+        topic=clean_full_topic,
+        style_arg=args.style,
+        enable_subs=args.subtitles,
+        voice_arg=args.voice,
+    )
 
     loop = asyncio.get_event_loop()
 
     # 兼容 Python 3.9：避免使用 match/case
-    if args.step == "script":
+    if args.step == step.SCRIPT:
         loop.run_until_complete(
             step.run_step_script(main_topic, subtitle, args.force, context_topic)
         )
-    elif args.step == "image":
+    elif args.step == step.IMAGE:
         loop.run_until_complete(step.run_step_image(main_topic, args.force))
-    elif args.step == "animate":
+    elif args.step == step.ANIMATE:
         loop.run_until_complete(step.run_step_animate(main_topic))
-    elif args.step == "audio":
+    elif args.step == step.AUDIO:
         loop.run_until_complete(step.run_step_audio(main_topic, args.force))
-    elif args.step == "video":
+    elif args.step == step.VIDEO:
         loop.run_until_complete(step.run_step_video(cover_title, cover_subtitle))
-    elif args.step == "all":
+    elif args.step == step.ALL:
         loop.run_until_complete(
             step.run_all_with_cover(
-                main_topic,
-                subtitle,
-                args.force,
-                context_topic,
+                topic=main_topic,
+                subtitle=subtitle,
+                force=args.force,
+                context_topic=context_topic,
                 cover_title=cover_title,
                 cover_subtitle=cover_subtitle,
             )

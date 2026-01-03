@@ -3,7 +3,7 @@ import pypinyin
 from PIL import Image, ImageDraw
 from moviepy.editor import ImageClip, CompositeVideoClip
 
-from config.config import config
+from config.config import C
 from model.models import Scene
 from util.logger import logger
 from steps.image.font import font_manager

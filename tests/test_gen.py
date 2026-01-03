@@ -3,7 +3,7 @@ import asyncio
 import os
 import time
 
-from config.config import config
+from config.config import C
 from model.models import VideoScript
 from steps.image.factory import ImageFactory
 from steps.script.factory import ScriptGeneratorFactory
@@ -13,12 +13,12 @@ from steps.video.factory import VideoAssemblerFactory
 
 async def run_test(topic: str, script_path: str = None, category: str = "成语故事"):
     print("🧪 开始集成测试（生成 1 幕迷你视频）")
-    print(f"   - LLM: {config.LLM_PROVIDER or 'auto'} / {config.LLM_MODEL}")
-    print(f"   - Image: {config.IMAGE_PROVIDER or 'auto'} / {config.IMAGE_MODEL}")
+    print(f"   - LLM: {C.LLM_PROVIDER or 'auto'} / {C.LLM_MODEL}")
+    print(f"   - Image: {C.IMAGE_PROVIDER or 'auto'} / {C.IMAGE_MODEL}")
     print(f"   - Category: {category}")
 
     # 测试默认开启字幕（含拼音）
-    config.ENABLE_SUBTITLES = True
+    C.ENABLE_SUBTITLES = True
 
     # 产物写入 tests/output/<时间戳>/
     base_output = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
@@ -26,10 +26,10 @@ async def run_test(topic: str, script_path: str = None, category: str = "成语�
     os.makedirs(test_out_dir, exist_ok=True)
 
     # 覆盖输出目录与当前类目（影响语速/BGM/布局等）
-    original_out = config.OUTPUT_DIR
-    original_cat = getattr(config, "CURRENT_CATEGORY", "")
-    config.OUTPUT_DIR = test_out_dir
-    config.CURRENT_CATEGORY = category
+    original_out = C.OUTPUT_DIR
+    original_cat = getattr(C, "CURRENT_CATEGORY", "")
+    C.OUTPUT_DIR = test_out_dir
+    C.CURRENT_CATEGORY = category
 
     script: VideoScript | None = None
 
@@ -83,8 +83,8 @@ async def run_test(topic: str, script_path: str = None, category: str = "成语�
         print(f"📄 脚本: {save_path}")
 
     finally:
-        config.OUTPUT_DIR = original_out
-        config.CURRENT_CATEGORY = original_cat
+        C.OUTPUT_DIR = original_out
+        C.CURRENT_CATEGORY = original_cat
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@ import pypinyin
 from PIL import Image, ImageDraw
 from moviepy.editor import ImageClip, CompositeVideoClip, concatenate_videoclips
 
-from config.config import config
+from config.config import C
 from model.models import Scene
 from util.logger import logger
 from steps.video.base import VideoAssemblerBase
@@ -11,7 +11,7 @@ from steps.image.font import font_manager
 
 class GenericVideoAssembler(VideoAssemblerBase):
     def _compose_scene(self, scene: Scene, visual_clip, duration: float):
-        if config.ENABLE_SUBTITLES:
+        if C.ENABLE_SUBTITLES:
             subtitle_clip = self.create_subtitle_clip(scene.narration, duration, visual_clip.size)
             if subtitle_clip:
                 return CompositeVideoClip([visual_clip, subtitle_clip])

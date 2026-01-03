@@ -3,9 +3,10 @@ import requests
 import asyncio
 from typing import List
 from openai import AsyncOpenAI
-from config.config import config
 from model.models import Scene
 from util.logger import logger
+from config.config import C
+from config import config
 
 try:
     import google.generativeai as genai
@@ -24,15 +25,15 @@ class ImageFactory:
         self.client = None
 
         # Determine provider
-        provider_key = config.IMAGE_PROVIDER.lower() if config.IMAGE_PROVIDER else ""
-        model_name = config.IMAGE_MODEL.lower()
+        provider_key = C.IMAGE_PROVIDER.lower() if C.IMAGE_PROVIDER else ""
+        model_name = C.IMAGE_MODEL.lower()
 
         if provider_key == "openai" or (not provider_key and "dall-e" in model_name):
             self.provider = "openai"
             from llm.openai_provider import OpenAIProvider
 
             try:
-                self.client = OpenAIProvider(config).get_image_client()
+                self.client = OpenAIProvider(C).get_image_client()
             except Exception as e:
                 logger.error(f"Failed to init OpenAI Provider for Image: {e}")
 
@@ -42,23 +43,18 @@ class ImageFactory:
             self.provider = "google"
             from llm.google_provider import GoogleProvider
 
-            self.client = GoogleProvider(config).get_image_client()  # Might be None
+            self.client = GoogleProvider(C).get_image_client()  # Might be None
 
-        elif provider_key in ["doubao", "volcengine"] or (
+        elif provider_key in ["volcengine"] or (
             not provider_key
-            and (
-                "doubao" in model_name
-                or "volc" in model_name
-                or "ep-" in model_name
-                or "jimeng" in model_name
-            )
+            and ("high_aes_general_v30l_zt2i" in model_name or "jimeng" in model_name)
         ):
-            self.provider = "doubao"
+            self.provider = "volcengine"
 
             from llm.volcengine_provider import VolcengineProvider
 
             try:
-                self.volc_provider = VolcengineProvider(config)
+                self.volc_provider = VolcengineProvider(C)
                 # We will lazy load specific clients (Ark vs Visual) in _generate_one_image depending on the model
                 # But to fail fast on auth, we can check basic validity
                 if not self.volc_provider.validate_config():
@@ -72,12 +68,16 @@ class ImageFactory:
 
     async def generate_images(self, scenes: List[Scene], force: bool = False):
         logger.info(
-            f"Starting image generation for {len(scenes)} scenes using {config.IMAGE_MODEL}..."
+            f"Starting image generation for {len(scenes)} scenes using {C.IMAGE_MODEL}..."
         )
 
         tasks = []
         for scene in scenes:
-            tasks.append(self._generate_one_image(scene, force))
+            img_path = self._generate_one_image(scene, force)
+            if img_path:
+                tasks.append(img_path)
+            else:
+                raise Exception("Image generation failed")
 
         results = await asyncio.gather(*tasks)
         return results
@@ -85,16 +85,16 @@ class ImageFactory:
     async def _generate_one_image(self, scene: Scene, force: bool = False) -> str:
         prompt = scene.image_prompt
 
-        # Apply sensitive word filtering
-        if hasattr(config, "SENSITIVE_WORDS") and config.SENSITIVE_WORDS:
-            for sensitive, replacement in config.SENSITIVE_WORDS.items():
+        # 敏感词过滤
+        if hasattr(C, "SENSITIVE_WORDS") and C.SENSITIVE_WORDS:
+            for sensitive, replacement in C.SENSITIVE_WORDS.items():
                 if sensitive in prompt:
                     logger.info(
                         f"🛡️ Sensitive word detected: replacing '{sensitive}' with '{replacement}'"
                     )
                     prompt = prompt.replace(sensitive, replacement)
         image_filename = f"scene_{scene.scene_id}.png"
-        image_path = os.path.join(config.OUTPUT_DIR, image_filename)
+        image_path = os.path.join(C.OUTPUT_DIR, image_filename)
 
         if not force and os.path.exists(image_path) and os.path.getsize(image_path) > 0:
             logger.info(f"Skipping Image {scene.scene_id} (Exists): {image_path}")
@@ -104,11 +104,11 @@ class ImageFactory:
         logger.info(f"Generating image for Scene {scene.scene_id}...")
 
         try:
-            if self.provider == "openai":
+            if self.provider == config.MODEL_PROVIDER_OPENAI:
                 response = await self.client.images.generate(
-                    model=config.IMAGE_MODEL,
+                    model=C.IMAGE_MODEL,
                     prompt=prompt,
-                    size=config.IMAGE_SIZE,  # Use config size (e.g. 1024x1792)
+                    size=C.IMAGE_SIZE,  # Use config size (e.g. 1024x1792)
                     quality="standard",
                     n=1,
                 )
@@ -117,15 +117,13 @@ class ImageFactory:
 
             # ... (Google Skipped) ...
 
-            elif self.provider == "doubao":
+            elif self.provider == config.MODEL_PROVIDER_VOLCENGINE:
                 # Determine sub-type (Ark Endpoint or Visual Service)
-                is_ark_endpoint = config.IMAGE_MODEL.startswith("ep-")
-                is_mock = config.IMAGE_MODEL.strip() == "mock"
+                is_ark_endpoint = C.IMAGE_MODEL.startswith("ep-")
+                is_mock = C.IMAGE_MODEL.strip() == "mock"
 
                 if is_ark_endpoint:
                     print(f"DEBUG: Ark Endpoint Logic")
-                    # ...
-                    pass
                 elif is_mock:
                     print(f"DEBUG: Mock Mode. Path: {image_path}")
                     # Mock Logic
@@ -135,8 +133,8 @@ class ImageFactory:
                     from PIL import Image
 
                     width, height = 1024, 1024
-                    if "x" in config.IMAGE_SIZE:
-                        parts = config.IMAGE_SIZE.split("x")
+                    if "x" in C.IMAGE_SIZE:
+                        parts = C.IMAGE_SIZE.split("x")
                         width, height = int(parts[0]), int(parts[1])
 
                     img = Image.new("RGB", (width, height), color="red")
@@ -148,51 +146,24 @@ class ImageFactory:
 
                     # Parsing Size
                     width, height = 1024, 1024
-                    if "x" in config.IMAGE_SIZE:
-                        parts = config.IMAGE_SIZE.split("x")
+                    if "x" in C.IMAGE_SIZE:
+                        parts = C.IMAGE_SIZE.split("x")
                         width, height = int(parts[0]), int(parts[1])
 
                     # Logic for req_key
-                    req_key = "high_aesthetic_t2i"  # Default
-                    if (
-                        config.IMAGE_MODEL == "doubao-1.5"
-                        or "3.0" in config.IMAGE_MODEL
-                    ):
-                        req_key = "high_aes_general_v30l_zt2i"
-                    elif "jimeng" in config.IMAGE_MODEL:
-                        if "4.0" in config.IMAGE_MODEL:
-                            req_key = "jimeng_t2i_v40"
-                        else:
-                            req_key = "jimeng_high_aes_general_v21_L"
-                    elif config.IMAGE_MODEL != "doubao":
-                        req_key = config.IMAGE_MODEL
-
+                    req_key = C.IMAGE_MODEL
                     logger.info(
                         f"🎨 Volcengine Visual Req Key: {req_key} | Size: {width}x{height}"
                     )
 
                     payload = {
                         "req_key": req_key,
-                        "prompt": prompt
-                        if "jimeng" in req_key or "v30" in req_key
-                        else None,
-                        "prompt_text": prompt
-                        if "high_aesthetic_t2i" == req_key
-                        else None,
+                        "prompt": prompt,
                         "width": width,
                         "height": height,
                     }
 
-                    # Unified payload logic
-                    if payload.get("prompt") is None:
-                        if "prompt" in payload:
-                            del payload["prompt"]
-                    if payload.get("prompt_text") is None:
-                        if "prompt_text" in payload:
-                            del payload["prompt_text"]
-
-                    # Just in case model is weird, default to prompt_text if both missing
-                    if "prompt" not in payload and "prompt_text" not in payload:
+                    if "prompt" not in payload:
                         payload["prompt"] = prompt
 
                     try:

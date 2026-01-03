@@ -3,13 +3,13 @@ import asyncio
 import requests
 from steps.animator.base_animator import BaseAnimator
 from util.logger import logger
-from config.config import config
+from config.config import C
 from model.models import Scene
 
 
 class LumaAnimator(BaseAnimator):
     def __init__(self):
-        self.api_key = config.LUMA_API_KEY
+        self.api_key = C.LUMA_API_KEY
         self.client = None
         if self.api_key:
             try:
@@ -76,7 +76,7 @@ class LumaAnimator(BaseAnimator):
             video_url = generation.assets.video
             if video_url:
                 video_filename = f"video_{scene.scene_id}.mp4"
-                video_path = os.path.join(config.OUTPUT_DIR, video_filename)
+                video_path = os.path.join(C.OUTPUT_DIR, video_filename)
 
                 # 下载
                 response = requests.get(video_url)

@@ -8,8 +8,10 @@ from pydantic import BaseModel, Field
 from llm.llm_client import LLMClient
 from model.models import VideoScript, Scene
 from util.logger import logger
-from config.config import config
+from config.config import C
+import config.config
 from prompt.factory import StrategyFactory
+
 
 # --- Pydantic Schemas for Structured Output ---
 class VideoDesign(BaseModel):
@@ -20,6 +22,7 @@ class VideoDesign(BaseModel):
         ..., description="Key characters and their visual descriptions."
     )
 
+
 class ScriptGeneratorBase(ABC):
     def __init__(self):
         self.llm = LLMClient()
@@ -28,20 +31,24 @@ class ScriptGeneratorBase(ABC):
 
     def _detect_language(self):
         # Based on LLM model name
-        model = config.LLM_MODEL.lower()
-        if any(x in model for x in ["doubao", "volc", "qwen", "glm", "deepseek", "yi-", "ep-"]):
+        provider = C.LLM_PROVIDER.lower()
+        if any(x in provider for x in [config.MODEL_PROVIDER_VOLCENGINE]):
             self.language = "cn"
-            logger.info(f"🇨🇳 Detected Chinese LLM ({config.LLM_MODEL}). Using Chinese System Prompts.")
+            logger.info(
+                f"🇨🇳 Detected Chinese LLM {C.LLM_MODEL}. Using Chinese System Prompts."
+            )
         else:
             self.language = "en"
-            logger.info(f"🌎 Using Standard English System Prompts for model: {config.LLM_MODEL}")
+            logger.info(
+                f"🌎 Using Standard English System Prompts for model: {C.LLM_MODEL}"
+            )
 
     def _sanitize_text(self, text: str) -> str:
         """Replace sensitive words based on config."""
-        if not text or not config.SENSITIVE_WORDS:
+        if not text or not C.SENSITIVE_WORDS:
             return text
         sanitized = text
-        for sensitive, safe in config.SENSITIVE_WORDS.items():
+        for sensitive, safe in C.SENSITIVE_WORDS.items():
             if sensitive in sanitized:
                 sanitized = sanitized.replace(sensitive, safe)
         return sanitized
@@ -73,16 +80,24 @@ class ScriptGeneratorBase(ABC):
                             pass
                         start_idx = -1
             if valid_scenes:
-                logger.info(f"Recovered {len(valid_scenes)} scenes from truncated JSON.")
+                logger.info(
+                    f"Recovered {len(valid_scenes)} scenes from truncated JSON."
+                )
                 return {"scenes": valid_scenes}
             return None
         except Exception as e:
             logger.error(f"JSON recovery failed: {e}")
             return None
 
-    def _detect_new_characters(self, script_content: str, existing_profiles: Dict[str, str]) -> Dict[str, str]:
+    def _detect_new_characters(
+        self, script_content: str, existing_profiles: Dict[str, str]
+    ) -> Dict[str, str]:
         """Ask LLM to identify new characters from the generated script."""
-        existing_names = list(existing_profiles.keys()) if isinstance(existing_profiles, dict) else []
+        existing_names = (
+            list(existing_profiles.keys())
+            if isinstance(existing_profiles, dict)
+            else []
+        )
         prompt = f"""
         基于以下生成的视频脚本，请识别是否有**该脚本中出现，但不在已有列表中**的关键角色。
         已有角色列表: {existing_names}
@@ -112,7 +127,9 @@ class ScriptGeneratorBase(ABC):
             return {}
 
     @abstractmethod
-    def _build_script_prompt(self, topic: str, subtitle: str, min_scenes: int, max_scenes: int, category: str) -> str:
+    def _build_script_prompt(
+        self, topic: str, subtitle: str, min_scenes: int, max_scenes: int, category: str
+    ) -> str:
         """
         Abstract method to build the user prompt for script generation.
         This is where Generic vs Book logic differs.
@@ -127,13 +144,17 @@ class ScriptGeneratorBase(ABC):
         series_profile_path: Optional[str] = None,
         context_topic: str = None,
     ) -> VideoScript:
-        logger.info(f"Generating script for topic: {topic}, subtitle: {subtitle} (Category: {category})")
+        logger.info(
+            f"Generating script for topic: {topic}, subtitle: {subtitle} (Category: {category})"
+        )
         if context_topic:
             logger.info(f"  Context Topic (for LLM): {context_topic}")
 
         prompt_topic = context_topic if context_topic else topic
-        min_scenes, max_scenes = config.get_scene_count_range(category)
-        logger.info(f"📊 Scene count target: {min_scenes}-{max_scenes} scenes for category '{category}'")
+        min_scenes, max_scenes = C.get_scene_count_range(category)
+        logger.info(
+            f"📊 Scene count target: {min_scenes}-{max_scenes} scenes for category '{category}'"
+        )
 
         # --- Prompts reused from original ---
         SYSTEM_PROMPT_DESIGN = """
@@ -207,8 +228,8 @@ class ScriptGeneratorBase(ABC):
 
         # --- Phase 1: Design ---
         style_inst_cn = ""
-        if config.IMAGE_STYLE:
-            style_inst_cn = f'2. 用户明确指定了风格: "{config.IMAGE_STYLE}"。请务必基于此风格进行扩展和细化。'
+        if C.IMAGE_STYLE:
+            style_inst_cn = f'2. 用户明确指定了风格: "{C.IMAGE_STYLE}"。请务必基于此风格进行扩展和细化。'
         else:
             style_inst_cn = "定义一个最适合该主题的视觉风格。"
 
@@ -227,7 +248,9 @@ class ScriptGeneratorBase(ABC):
             try:
                 with open(series_profile_path, "r", encoding="utf-8") as f:
                     existing_profile_data = json.load(f)
-                logger.info(f"📚 Loaded existing series profile from {series_profile_path}")
+                logger.info(
+                    f"📚 Loaded existing series profile from {series_profile_path}"
+                )
                 if "visual_style" in existing_profile_data:
                     visual_style_prompt = existing_profile_data["visual_style"]
                 if "character_profiles" in existing_profile_data:
@@ -237,11 +260,15 @@ class ScriptGeneratorBase(ABC):
 
         if not (visual_style_prompt and character_profiles):
             logger.info("Phase 1: Designing Visual Style & Characters...")
-            design_response = self.llm.generate_text(prompt_design_user, final_design_sys)
+            design_response = self.llm.generate_text(
+                prompt_design_user, final_design_sys
+            )
             design_response = re.sub(r"```json\n|\n```", "", design_response).strip()
             try:
                 design_data = json.loads(design_response)
-                visual_style_prompt = self._sanitize_text(design_data.get("visual_style", ""))
+                visual_style_prompt = self._sanitize_text(
+                    design_data.get("visual_style", "")
+                )
                 character_profiles = design_data.get("character_profiles", {})
             except json.JSONDecodeError:
                 logger.warning("Failed to parse design JSON. Using defaults.")
@@ -250,7 +277,7 @@ class ScriptGeneratorBase(ABC):
 
             if isinstance(character_profiles, str):
                 character_profiles = {"Main": character_profiles}
-            
+
             if not visual_style_prompt:
                 logger.error("Failed to generate design.")
                 return None
@@ -272,7 +299,9 @@ class ScriptGeneratorBase(ABC):
         logger.info(f"Visual Style: {visual_style_prompt[:50]}...")
         logger.info(f"Characters: {list(character_profiles.keys())}")
 
-        character_profiles_str = "\n".join([f"{name}: {desc}" for name, desc in character_profiles.items()])
+        character_profiles_str = "\n".join(
+            [f"{name}: {desc}" for name, desc in character_profiles.items()]
+        )
         if not character_profiles_str:
             character_profiles_str = "No specific character focus."
 
@@ -306,17 +335,17 @@ class ScriptGeneratorBase(ABC):
         # We need to pass the resolved prompt_topic, topic_display etc.
         # But wait, original code constructs topic_display here.
         topic_display = f"{topic}: {subtitle}" if subtitle else topic
-        
+
         # NOTE: Passing prompt_topic (which might be context_topic) AND original topic
         # The abstract method should handle constructing the prompt string.
         prompt_script_user = self._build_script_prompt(
             topic=topic,
             prompt_topic=prompt_topic,
-            subtitle=subtitle, 
-            min_scenes=min_scenes, 
-            max_scenes=max_scenes, 
+            subtitle=subtitle,
+            min_scenes=min_scenes,
+            max_scenes=max_scenes,
             category=category,
-            topic_display=topic_display
+            topic_display=topic_display,
         )
 
         logger.info("Phase 2: Generating Scenes...")
@@ -330,7 +359,9 @@ class ScriptGeneratorBase(ABC):
             logger.warning("JSON parse failed. Attempting to recover truncated JSON...")
             data = self._recover_json(response_text)
             if not data:
-                logger.error(f"Failed to decode JSON from LLM: {response_text[:200]}...")
+                logger.error(
+                    f"Failed to decode JSON from LLM: {response_text[:200]}..."
+                )
                 raise Exception("Script generation failed: Invalid JSON")
 
         scenes = []
@@ -353,21 +384,27 @@ class ScriptGeneratorBase(ABC):
         # Check counts
         scene_count = len(scenes)
         if scene_count < min_scenes:
-            logger.warning(f"⚠️  Scene count ({scene_count}) is below target ({min_scenes}-{max_scenes}).")
+            logger.warning(
+                f"⚠️  Scene count ({scene_count}) is below target ({min_scenes}-{max_scenes})."
+            )
         elif scene_count > max_scenes:
-            logger.warning(f"⚠️  Scene count ({scene_count}) exceeds target ({min_scenes}-{max_scenes}).")
+            logger.warning(
+                f"⚠️  Scene count ({scene_count}) exceeds target ({min_scenes}-{max_scenes})."
+            )
         else:
             logger.info(f"✅ Scene count ({scene_count}) meets target range.")
 
         summary = data.get("summary", "")
         if not summary and scenes:
             summary = scenes[0].narration
-        
+
         # --- Phase 3: Update Profile ---
         if series_profile_path:
             logger.info("Phase 3: Checking for new characters...")
             try:
-                new_chars = self._detect_new_characters(full_response, character_profiles)
+                new_chars = self._detect_new_characters(
+                    full_response, character_profiles
+                )
                 if new_chars:
                     logger.info(f"🆕 Detected new characters: {list(new_chars.keys())}")
                     if isinstance(character_profiles, dict):

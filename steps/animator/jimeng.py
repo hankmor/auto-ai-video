@@ -3,7 +3,7 @@ import requests
 import asyncio
 from steps.animator.base_animator import BaseAnimator
 from util.logger import logger
-from config.config import config
+from config.config import C
 from model.models import Scene
 
 
@@ -12,7 +12,7 @@ class JimengAnimator(BaseAnimator):
         from auto_maker.providers.volcengine_provider import VolcengineProvider
 
         try:
-            self.provider = VolcengineProvider(config)
+            self.provider = VolcengineProvider(C)
             self.client = self.provider.get_image_client(service_type="visual")
         except Exception as e:
             logger.error(f"初始化 JimengAnimator 失败: {e}")
@@ -44,8 +44,8 @@ class JimengAnimator(BaseAnimator):
             # 2. 构建请求载荷
             # 使用 Jimeng 3.0 (jimeng_i2v_first_v30)
             req_key = (
-                config.JIMENG_VIDEO_REQ_KEY
-                if hasattr(config, "JIMENG_VIDEO_REQ_KEY")
+                C.JIMENG_VIDEO_REQ_KEY
+                if hasattr(C, "JIMENG_VIDEO_REQ_KEY")
                 else "jimeng_i2v_first_v30"
             )
 
@@ -186,7 +186,7 @@ class JimengAnimator(BaseAnimator):
 
     async def _save_video(self, url, scene):
         video_filename = f"video_{scene.scene_id}.mp4"
-        video_path = os.path.join(config.OUTPUT_DIR, video_filename)
+        video_path = os.path.join(C.OUTPUT_DIR, video_filename)
         response = requests.get(url)
         if response.status_code == 200:
             with open(video_path, "wb") as f:
@@ -200,7 +200,7 @@ class JimengAnimator(BaseAnimator):
         import base64
 
         video_filename = f"video_{scene.scene_id}.mp4"
-        video_path = os.path.join(config.OUTPUT_DIR, video_filename)
+        video_path = os.path.join(C.OUTPUT_DIR, video_filename)
         with open(video_path, "wb") as f:
             f.write(base64.b64decode(b64_str))
         logger.info(f"已保存 Jimeng 视频 (二进制) 到 {video_path}")

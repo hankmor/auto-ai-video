@@ -1,6 +1,6 @@
 import os
 from openai import OpenAI
-from config.config import config
+from config.config import C
 from util.logger import logger
 
 try:
@@ -19,14 +19,14 @@ except ImportError:
 class LLMClient:
     def __init__(self):
         # 确定提供商
-        provider_key = config.LLM_PROVIDER.lower() if config.LLM_PROVIDER else ""
-        model_name = config.LLM_MODEL.lower()
+        provider_key = C.LLM_PROVIDER.lower() if C.LLM_PROVIDER else ""
+        model_name = C.LLM_MODEL.lower()
 
         if provider_key == "google" or (not provider_key and "gemini" in model_name):
             self.provider = "google"
             from llm.google_provider import GoogleProvider
             try:
-                self.client = GoogleProvider(config).get_llm_client()
+                self.client = GoogleProvider(C).get_llm_client()
             except Exception as e:
                 logger.error(f"Failed to init Google Provider: {e}")
                 raise e
@@ -36,7 +36,7 @@ class LLMClient:
             self.provider = "doubao"
             from llm.volcengine_provider import VolcengineProvider
             try:
-                self.client = VolcengineProvider(config).get_llm_client()
+                self.client = VolcengineProvider(C).get_llm_client()
             except Exception as e:
                 logger.error(f"Failed to init Volcengine Provider: {e}")
                 raise e
@@ -46,7 +46,7 @@ class LLMClient:
             self.provider = "openai"
             from llm.openai_provider import OpenAIProvider
             try:
-                self.client = OpenAIProvider(config).get_llm_client()
+                self.client = OpenAIProvider(C).get_llm_client()
             except Exception as e:
                 logger.error(f"Failed to init OpenAI Provider: {e}")
                 self.client = None
@@ -59,8 +59,7 @@ class LLMClient:
             if self.provider == "google":
                 # Google GenAI 用法
                 model = self.client.GenerativeModel(
-                    model_name=config.LLM_MODEL,
-                    system_instruction=system_prompt
+                    model_name=C.LLM_MODEL, system_instruction=system_prompt
                 )
                 response = model.generate_content(prompt)
                 return response.text
@@ -69,24 +68,24 @@ class LLMClient:
                 # 豆包用法（通过 Ark 的 OpenAI 兼容接口）
                 # 注意：配置中的模型名称应为端点 ID（例如 ep-2024...）
                 response = self.client.chat.completions.create(
-                    model=config.LLM_MODEL,
+                    model=C.LLM_MODEL,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt},
                     ],
-                    temperature=0.7
+                    temperature=0.7,
                 )
                 return response.choices[0].message.content
 
             else:
                 # OpenAI 用法
                 response = self.client.chat.completions.create(
-                    model=config.LLM_MODEL,
+                    model=C.LLM_MODEL,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt},
                     ],
-                    temperature=0.7
+                    temperature=0.7,
                 )
                 return response.choices[0].message.content
 

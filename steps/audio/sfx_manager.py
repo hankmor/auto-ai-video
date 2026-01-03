@@ -1,6 +1,6 @@
 import os
 import requests
-from config.config import config
+from config.config import C
 from util.logger import logger
 
 class SFXManager:
@@ -8,7 +8,7 @@ class SFXManager:
     """
     
     def __init__(self):
-        self.sfx_dir = os.path.join(config.ASSETS_DIR, "sfx")
+        self.sfx_dir = os.path.join(C.ASSETS_DIR, "sfx")
         os.makedirs(self.sfx_dir, exist_ok=True)
     
     def get_sfx(self, keyword: str) -> str:

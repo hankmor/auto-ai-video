@@ -1,6 +1,6 @@
 import os
 from PIL import ImageFont
-from config.config import config
+from config.config import C
 
 from util.logger import logger
 
@@ -38,7 +38,7 @@ class FontManager:
             ImageFont: 加载的字体，或者如果全部失败则返回默认 PIL 字体。
         """
         # 1. 从配置中获取候选路径
-        candidates = config.FONTS.get(font_type, [])
+        candidates = C.FONTS.get(font_type, [])
         
         # 2. 如果列表为空或未配置特定类型，则追加硬编码默认值
         if not candidates:

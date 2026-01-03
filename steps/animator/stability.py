@@ -4,13 +4,13 @@ import requests
 import time
 from steps.animator.base_animator import BaseAnimator
 from util.logger import logger
-from config.config import config
+from config.config import C
 from model.models import Scene
 
 
 class StabilityAnimator(BaseAnimator):
     def __init__(self):
-        self.api_key = config.STABILITY_API_KEY
+        self.api_key = C.STABILITY_API_KEY
         self.api_host = "https://api.stability.ai"
 
     async def animate_scene(self, scene: Scene) -> str:
@@ -75,7 +75,7 @@ class StabilityAnimator(BaseAnimator):
             # 3. 保存视频
             if video_bytes:
                 video_filename = f"video_{scene.scene_id}.mp4"
-                video_path = os.path.join(config.OUTPUT_DIR, video_filename)
+                video_path = os.path.join(C.OUTPUT_DIR, video_filename)
                 with open(video_path, "wb") as f:
                     f.write(video_bytes)
 

@@ -24,7 +24,7 @@ import moviepy.audio.fx.all as afx
 import moviepy.video.fx.all as vfx
 import subprocess
 
-from config.config import config
+from config.config import C
 from model.models import Scene
 from util.logger import logger
 from steps.image.font import font_manager
@@ -41,11 +41,7 @@ class VideoAssemblerBase(ABC):
         pass
 
     def _load_visual(self, scene: Scene, duration: float) -> Optional[VideoClip]:
-        if (
-            config.ENABLE_ANIMATION
-            and scene.video_path
-            and os.path.exists(scene.video_path)
-        ):
+        if C.ENABLE_ANIMATION and scene.video_path and os.path.exists(scene.video_path):
             try:
                 v_clip = VideoFileClip(scene.video_path)
                 if v_clip.duration < duration:
@@ -185,7 +181,7 @@ class VideoAssemblerBase(ABC):
             logo_path = os.path.join("brand", "logo_gemini_magic_storybook.png")
             if not os.path.exists(logo_path):
                 return None
-            width, height = config.VIDEO_SIZE
+            width, height = C.VIDEO_SIZE
             brand_dir = "brand"
             os.makedirs(brand_dir, exist_ok=True)
             bg_path = os.path.join(brand_dir, "outro_bg.png")
@@ -522,10 +518,10 @@ class VideoAssemblerBase(ABC):
         trans_duration = 0.0
         if (
             category
-            and hasattr(config, "CATEGORY_TRANSITIONS")
-            and category in config.CATEGORY_TRANSITIONS
+            and hasattr(C, "CATEGORY_TRANSITIONS")
+            and category in C.CATEGORY_TRANSITIONS
         ):
-            trans_type = config.CATEGORY_TRANSITIONS[category]
+            trans_type = C.CATEGORY_TRANSITIONS[category]
             if trans_type == "crossfade":
                 trans_duration = 0.8
             elif trans_type == "crossfade_slow":
@@ -539,13 +535,11 @@ class VideoAssemblerBase(ABC):
                 break
 
         if topic and cover_bg_path:
-            cover_path = os.path.join(config.OUTPUT_DIR, "cover.png")
+            cover_path = os.path.join(C.OUTPUT_DIR, "cover.png")
             if self.generate_cover(cover_bg_path, topic, cover_path, subtitle=subtitle):
                 # Title Audio Logic (CLI Fallback for simplicity and reliability)
                 try:
-                    title_audio_path = os.path.join(
-                        config.OUTPUT_DIR, "title_audio.mp3"
-                    )
+                    title_audio_path = os.path.join(C.OUTPUT_DIR, "title_audio.mp3")
                     # 标题语音（不存在才生成，避免重复开销）
                     if not os.path.exists(title_audio_path):
                         cmd_title = [
@@ -555,7 +549,7 @@ class VideoAssemblerBase(ABC):
                             "--write-media",
                             title_audio_path,
                             "--voice",
-                            config.TTS_VOICE_TITLE,
+                            C.TTS_VOICE_TITLE,
                         ]
                         subprocess.run(
                             cmd_title,
@@ -619,7 +613,7 @@ class VideoAssemblerBase(ABC):
         if not clips:
             return
 
-        if config.ENABLE_BRAND_OUTRO:
+        if C.ENABLE_BRAND_OUTRO:
             platform_map = {"儿童绘本": "general", "英语绘本": "general"}
             platform = platform_map.get(category, "general")
             outro_clip = self.create_brand_outro(duration=4.0, platform=platform)
@@ -631,19 +625,19 @@ class VideoAssemblerBase(ABC):
         final_clip = main_clip
 
         # Custom Intro Logic
-        if hasattr(config, "ENABLE_CUSTOM_INTRO") and config.ENABLE_CUSTOM_INTRO:
+        if hasattr(C, "ENABLE_CUSTOM_INTRO") and C.ENABLE_CUSTOM_INTRO:
             # 1. 尝试从分类配置中获取专属片头
             intro_path = None
             if (
                 category
-                and hasattr(config, "CATEGORY_INTROS")
-                and category in config.CATEGORY_INTROS
+                and hasattr(C, "CATEGORY_INTROS")
+                and category in C.CATEGORY_INTROS
             ):
-                intro_path = config.CATEGORY_INTROS[category]
+                intro_path = C.CATEGORY_INTROS[category]
 
             # 2. 如果没有分类片头，使用默认通用配置
             if not intro_path:
-                generic_intro = getattr(config, "CUSTOM_INTRO_VIDEO_PATH", "")
+                generic_intro = getattr(C, "CUSTOM_INTRO_VIDEO_PATH", "")
                 if generic_intro:
                     if isinstance(generic_intro, list):
                         import random
@@ -668,17 +662,15 @@ class VideoAssemblerBase(ABC):
 
                     # Resize intro if needed to match main clip?
                     # Generally better to let composite handle it or resize intro to config.VIDEO_SIZE
-                    if hasattr(config, "VIDEO_SIZE"):
-                        target_w, target_h = config.VIDEO_SIZE
+                    if hasattr(C, "VIDEO_SIZE"):
+                        target_w, target_h = C.VIDEO_SIZE
                         # Resize respecting aspect ratio or just fill? Assuming standard resize for intro
                         if intro_clip.size != (target_w, target_h):
                             intro_clip = intro_clip.resize(newsize=(target_w, target_h))
 
-                    intro_trans = getattr(
-                        config, "CUSTOM_INTRO_TRANSITION", "crossfade"
-                    )
+                    intro_trans = getattr(C, "CUSTOM_INTRO_TRANSITION", "crossfade")
                     intro_trans_dur = float(
-                        getattr(config, "CUSTOM_INTRO_TRANSITION_DURATION", 0.8)
+                        getattr(C, "CUSTOM_INTRO_TRANSITION_DURATION", 0.8)
                     )
 
                     intro_padding = 0
@@ -700,8 +692,8 @@ class VideoAssemblerBase(ABC):
                 )
 
         bgm_file = None
-        if category and category in config.CATEGORY_BGM:
-            bgm_filename = config.CATEGORY_BGM[category]
+        if category and category in C.CATEGORY_BGM:
+            bgm_filename = C.CATEGORY_BGM[category]
             # Assumes assets path relative to this file's parent's parent...
             # Original: os.path.join(os.path.dirname(__file__), "assets", "music")
             # Now we are in auto_maker/steps/video/base.py.
@@ -730,7 +722,7 @@ class VideoAssemblerBase(ABC):
             except Exception as e:
                 logger.error(f"Failed to mix BGM: {e}")
 
-        output_path = os.path.join(config.OUTPUT_DIR, output_filename)
+        output_path = os.path.join(C.OUTPUT_DIR, output_filename)
         final_clip.write_videofile(
             output_path, fps=24, codec="libx264", audio_codec="aac"
         )
