@@ -175,6 +175,12 @@ class Config:
             self.IMAGE_SIZE = data["models"].get(
                 "image_size", self.IMAGE_SIZE
             )  # e.g. "1024x1792"
+            try:
+                w, h = self.IMAGE_SIZE.lower().split("x")
+                self.VIDEO_SIZE = (int(w.strip()), int(h.strip()))
+            except Exception:
+                self.VIDEO_SIZE = (1080, 1920)
+
             self.IMAGE_STYLE = data["models"].get("image_style", self.IMAGE_STYLE)
 
             self.STYLES = data["models"].get("styles", {})

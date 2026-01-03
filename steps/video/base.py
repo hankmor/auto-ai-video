@@ -664,9 +664,23 @@ class VideoAssemblerBase(ABC):
                     # Generally better to let composite handle it or resize intro to config.VIDEO_SIZE
                     if hasattr(C, "VIDEO_SIZE"):
                         target_w, target_h = C.VIDEO_SIZE
-                        # Resize respecting aspect ratio or just fill? Assuming standard resize for intro
-                        if intro_clip.size != (target_w, target_h):
-                            intro_clip = intro_clip.resize(newsize=(target_w, target_h))
+                        w, h = intro_clip.size
+                        # Aspect Fill (Resize then Crop)
+                        if w != target_w or h != target_h:
+                            ratio_w = target_w / w
+                            ratio_h = target_h / h
+                            scale = max(ratio_w, ratio_h)
+                            if scale != 1.0:
+                                intro_clip = intro_clip.resize(scale)
+
+                            # Center Crop if needed
+                            if intro_clip.w != target_w or intro_clip.h != target_h:
+                                intro_clip = intro_clip.crop(
+                                    x_center=intro_clip.w / 2,
+                                    y_center=intro_clip.h / 2,
+                                    width=target_w,
+                                    height=target_h,
+                                )
 
                     intro_trans = getattr(C, "CUSTOM_INTRO_TRANSITION", "crossfade")
                     intro_trans_dur = float(
@@ -676,7 +690,7 @@ class VideoAssemblerBase(ABC):
                     intro_padding = 0
                     if intro_trans == "crossfade" and intro_trans_dur > 0:
                         main_clip = main_clip.crossfadein(intro_trans_dur)
-                        intro_padding = -intro_trans_dur
+                        intro_padding = intro_trans_dur
 
                     final_clip = concatenate_videoclips(
                         [intro_clip, main_clip], method="compose", padding=intro_padding
