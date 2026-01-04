@@ -1,0 +1,7 @@
+<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='https://www.w3.org/2001/mstts' xml:lang='zh-CN'>
+    <voice name='zh-CN-XiaoxiaoNeural'>
+        <mstts:express-as style='cheerful' styledegree="2">
+            大家好，我是绘宝！今天是我出生的第一天，我超级开心！
+        </mstts:express-as>
+    </voice>
+</speak>

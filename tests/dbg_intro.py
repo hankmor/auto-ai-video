@@ -67,7 +67,8 @@ def main():
             os.path.dirname(os.path.abspath(__file__)), "output/debug_intro"
         )
 
-    C.VIDEO_SIZE = (1080, 1920)  # Target 9:16
+    # C.VIDEO_SIZE = (1080, 1920)  # Target 9:16 - Commented out to test config loading
+    print(f"DEBUG: C.VIDEO_SIZE from config: {getattr(C, 'VIDEO_SIZE', 'NOT SET')}")
     C.ENABLE_CUSTOM_INTRO = True
 
     # 显式设置转场参数以方便观察

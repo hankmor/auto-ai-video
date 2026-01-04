@@ -94,7 +94,8 @@ class BookVideoAssembler(VideoAssemblerBase):
             try:
                 font_hanzi = font_manager.get_font("chinese", font_size_hanzi)
                 font_pinyin = font_manager.get_font("chinese", font_size_pinyin)
-            except:
+            except Exception as e:
+                logger.error(f"Failed to load font: {e}")
                 return visual_clip
             
             chars_per_line = int(text_area_w / font_size_hanzi)

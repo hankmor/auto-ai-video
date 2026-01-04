@@ -9,7 +9,7 @@ from llm.llm_client import LLMClient
 from model.models import VideoScript, Scene
 from util.logger import logger
 from config.config import C
-import config.config
+import config.config as config
 from prompt.factory import StrategyFactory
 
 
@@ -203,7 +203,7 @@ class ScriptGeneratorBase(ABC):
         
         对于 "narration" (旁白):
         1. {language_instruction}
-        2. 语调生动，字数控制在 30-50 字以内。
+        2. {narration_length_instruction}
         {category_instruction}
         
         对于 "emotion" (情感): 选择 cheerful, sad, excited, fearful, affectionate, angry, serious 之一。
@@ -325,6 +325,11 @@ class ScriptGeneratorBase(ABC):
                 min_scenes=min_scenes,
                 max_scenes=max_scenes,
                 language_instruction=lang_inst,
+                narration_length_instruction=(
+                    "语调生动，讲述一个完整的长故事（800-2000字），适合长时间聆听。"
+                    if category == "有声读物"
+                    else "语调生动，字数控制在 30-50 字以内。"
+                ),
                 category_instruction=cat_inst,
                 subtitle_info=f"本章标题: {subtitle}" if subtitle else "",
             )

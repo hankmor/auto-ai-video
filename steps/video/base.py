@@ -2,6 +2,8 @@ import os
 import numpy as np
 import pypinyin
 import math
+import asyncio
+import edge_tts
 from abc import ABC, abstractmethod
 from typing import List, Optional
 from PIL import Image, ImageDraw
@@ -34,6 +36,57 @@ class VideoAssemblerBase(ABC):
     def __init__(self):
         pass
 
+    def _generate_intro_dub_sync(self, text, output_path):
+        """
+        同步生成片头配音音频
+        Synchronously generate intro dubbing audio
+        """
+        voice = getattr(C, "CUSTOM_INTRO_DUB_VOICE", "zh-CN-YunxiaNeural")
+        # Default config values
+        pitch = getattr(C, "CUSTOM_INTRO_DUB_PITCH", "+0Hz")
+        rate = getattr(C, "CUSTOM_INTRO_DUB_RATE", "+0%")
+        style = getattr(C, "CUSTOM_INTRO_DUB_STYLE", "")
+
+        # Style presets map (Mocking style with prosody)
+        # Since Edge-TTS often ignores or bans 'express-as' SSML, we simulate it.
+        STYLE_PROSODY = {
+            "excited": {"pitch": "+5Hz", "rate": "+15%"},
+            "cheerful": {"pitch": "+3Hz", "rate": "+10%"},
+            "friendly": {"pitch": "+2Hz", "rate": "+5%"},
+            "sad": {"pitch": "-5Hz", "rate": "-10%"},
+            "fearful": {"pitch": "+10Hz", "rate": "+15%"},
+            "angry": {"pitch": "+5Hz", "rate": "+20%"},
+        }
+
+        # Apply style override if exists
+        if style:
+            # Normalize to lowercase
+            s = style.lower()
+            if s in STYLE_PROSODY:
+                preset = STYLE_PROSODY[s]
+                pitch = preset["pitch"]
+                rate = preset["rate"]
+                logger.debug(f"🎭 Applied style '{s}' -> pitch: {pitch}, rate: {rate}")
+
+        async def _gen():
+            communicate = edge_tts.Communicate(text, voice, pitch=pitch, rate=rate)
+            await communicate.save(output_path)
+
+        try:
+            # Check for existing event loop
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    pass
+            except:
+                pass
+
+            asyncio.run(_gen())
+            return True
+        except Exception as e:
+            logger.error(f"Intro Dub Gen Failed: {e}")
+            return False
+
     @abstractmethod
     def _compose_scene(
         self, scene: Scene, visual_clip: VideoClip, duration: float
@@ -53,6 +106,24 @@ class VideoAssemblerBase(ABC):
         if scene.image_path and os.path.exists(scene.image_path):
             try:
                 img_clip = ImageClip(scene.image_path)
+                # Resize early to force consistent video size
+                if hasattr(C, "VIDEO_SIZE"):
+                    # Use Aspect Fill logic or simple resize?
+                    # For scenes, usually we want to fill the screen.
+                    # Since Ken Burns adds movement, starting with a slightly larger or exact fit is good.
+                    # Let's resize output of Ken Burns or input?
+                    # Safer: Resize input to be "large enough" to cover C.VIDEO_SIZE,
+                    # but simple resize(C.VIDEO_SIZE) is safest for dimension consistency.
+                    # However, Ken Burns needs some room? No, apply_ken_burns zooms IN.
+                    # So input should be at least C.VIDEO_SIZE.
+                    # If input is huge (2048x...), we should resize DOWN to C.VIDEO_SIZE first to save processing?
+                    # YES.
+                    target_w, target_h = C.VIDEO_SIZE
+                    # If huge, resize down to target_w, target_h (approx)
+                    # But aspect ratio might differ?
+                    # Let's just resize to match C.VIDEO_SIZE exactly for now to solve the bug.
+                    img_clip = img_clip.resize(newsize=C.VIDEO_SIZE)
+
                 return self.apply_ken_burns(img_clip, duration=duration)
             except Exception as e:
                 logger.error(f"Error loading image {scene.image_path}: {e}")
@@ -572,18 +643,30 @@ class VideoAssemblerBase(ABC):
                         if trans_duration > 0:
                             total_duration += trans_duration
 
-                        cover_clip = ImageClip(cover_path).set_duration(total_duration)
+                        # Ensure cover matches C.VIDEO_SIZE
+                        cover_clip = ImageClip(cover_path)
+                        if hasattr(C, "VIDEO_SIZE"):
+                            cover_clip = cover_clip.resize(newsize=C.VIDEO_SIZE)
+
+                        cover_clip = cover_clip.set_duration(total_duration)
                         cover_clip = cover_clip.set_audio(
                             CompositeAudioClip([title_audio_clip.set_start(silence_pre)])
                         )
                         clips.append(cover_clip)
                         bgm_start_time += total_duration
                     else:
-                        clips.append(ImageClip(cover_path).set_duration(2.0))
+                        cover_clip = ImageClip(cover_path)
+                        if hasattr(C, "VIDEO_SIZE"):
+                            cover_clip = cover_clip.resize(newsize=C.VIDEO_SIZE)
+                        clips.append(cover_clip.set_duration(2.0))
                         bgm_start_time += 2.0
                 except Exception as e:
                     logger.warning(f"Failed to add audio to cover: {e}")
-                    clips.append(ImageClip(cover_path).set_duration(2.0))
+                    # Fallback (also resize)
+                    cover_clip = ImageClip(cover_path)
+                    if hasattr(C, "VIDEO_SIZE"):
+                        cover_clip = cover_clip.resize(newsize=C.VIDEO_SIZE)
+                    clips.append(cover_clip.set_duration(2.0))
                     bgm_start_time += 2.0
 
         for scene in scenes:
@@ -660,16 +743,72 @@ class VideoAssemblerBase(ABC):
                     logger.info(f"Adding custom intro video from {intro_path}")
                     intro_clip = VideoFileClip(intro_path)
 
+                    # --- 片头配音 (Dubbing) 逻辑 ---
+                    enable_dub = getattr(C, "ENABLE_CUSTOM_INTRO_DUB", False)
+                    dub_text_config = getattr(C, "CUSTOM_INTRO_DUB_TEXT", "")
+
+                    # Resolve dub text based on intro filename
+                    dub_text = ""
+                    if isinstance(dub_text_config, dict):
+                        # Extract filename from intro_path e.g. "1.mp4"
+                        intro_filename = os.path.basename(intro_path)
+                        dub_text = dub_text_config.get(intro_filename)
+                        if not dub_text:
+                            dub_text = dub_text_config.get("default", "")
+                    else:
+                        dub_text = str(dub_text_config)
+
+                    if enable_dub and dub_text:
+                        logger.info(
+                            f"🎤 Generating Intro Dub for {os.path.basename(intro_path)}: {dub_text[:15]}..."
+                        )
+                        dub_audio_path = os.path.join(C.OUTPUT_DIR, "intro_dub.mp3")
+                        if self._generate_intro_dub_sync(dub_text, dub_audio_path):
+                            if os.path.exists(dub_audio_path):
+                                new_audio = AudioFileClip(dub_audio_path)
+                                # 静音原视频并替换音轨
+                                intro_clip = intro_clip.without_audio().set_audio(
+                                    new_audio
+                                )
+
+                                # 检查时长：如果音频比视频长，进行定格延长
+                                if new_audio.duration > intro_clip.duration:
+                                    logger.info(
+                                        "⚠️ Intro Audio > Video. Extending video..."
+                                    )
+                                    # 截取最后一帧
+                                    last_frame_t = max(0, intro_clip.duration - 0.1)
+                                    last_frame_img = intro_clip.get_frame(last_frame_t)
+
+                                    # 计算需要延长的时长 (+0.5s 缓冲)
+                                    freeze_dur = (
+                                        new_audio.duration - intro_clip.duration + 0.5
+                                    )
+
+                                    freeze_clip = ImageClip(
+                                        last_frame_img
+                                    ).set_duration(freeze_dur)
+                                    # 拼接
+                                    intro_clip = concatenate_videoclips(
+                                        [intro_clip, freeze_clip]
+                                    )
+                                    intro_clip = intro_clip.set_audio(
+                                        new_audio
+                                    )  # 重新确保音轨完整
+                    # --- 配音逻辑结束 ---
+
                     # Resize intro if needed to match main clip?
                     # Generally better to let composite handle it or resize intro to config.VIDEO_SIZE
                     if hasattr(C, "VIDEO_SIZE"):
                         target_w, target_h = C.VIDEO_SIZE
                         w, h = intro_clip.size
+
                         # Aspect Fill (Resize then Crop)
                         if w != target_w or h != target_h:
                             ratio_w = target_w / w
                             ratio_h = target_h / h
                             scale = max(ratio_w, ratio_h)
+                            print(f"DEBUG: Calculated Scale: {scale}")
                             if scale != 1.0:
                                 intro_clip = intro_clip.resize(scale)
 
@@ -681,22 +820,55 @@ class VideoAssemblerBase(ABC):
                                     width=target_w,
                                     height=target_h,
                                 )
+                    else:
+                        print("DEBUG: C.VIDEO_SIZE NOT FOUND!")
 
                     intro_trans = getattr(C, "CUSTOM_INTRO_TRANSITION", "crossfade")
-                    intro_trans_dur = float(
-                        getattr(C, "CUSTOM_INTRO_TRANSITION_DURATION", 0.8)
+                    intro_trans_dur = abs(
+                        float(getattr(C, "CUSTOM_INTRO_TRANSITION_DURATION", 0.8))
                     )
 
                     intro_padding = 0
                     if intro_trans == "crossfade" and intro_trans_dur > 0:
-                        main_clip = main_clip.crossfadein(intro_trans_dur)
-                        intro_padding = intro_trans_dur
+                        # 1. 延长片头：使用定格帧
+                        # 截取最后一帧（安全距离：结束前 0.1 秒）
+                        last_frame_t = max(0, intro_clip.duration - 0.1)
+                        last_frame_img = intro_clip.get_frame(last_frame_t)
+                        freeze_clip = ImageClip(last_frame_img).set_duration(
+                            intro_trans_dur
+                        )
+                        # 确保属性匹配（虽然 get_frame 获取了内容，ImageClip 进一步封装）
+                        # 虽然 ImageClip 从数组创建很稳健，但保持属性匹配是好习惯。
 
-                    final_clip = concatenate_videoclips(
-                        [intro_clip, main_clip], method="compose", padding=intro_padding
-                    )
-                    # Adjust BGM start time: add intro duration, subtract overlap
-                    bgm_start_time += intro_clip.duration + intro_padding
+                        # 合并：原始片头 + 定格帧
+                        intro_extended = concatenate_videoclips(
+                            [intro_clip, freeze_clip]
+                        )
+
+                        # 2. 正片淡入 (Fade In)
+                        main_clip = main_clip.crossfadein(intro_trans_dur)
+
+                        # 3. 将定格部分与正片重叠
+                        intro_padding = -intro_trans_dur
+
+                        # 使用延长后的片头进行合并
+                        final_clip = concatenate_videoclips(
+                            [intro_extended, main_clip],
+                            method="compose",
+                            padding=intro_padding,
+                        )
+                    else:
+                        # 普通硬切或其他逻辑（无转场）
+                        final_clip = concatenate_videoclips(
+                            [intro_clip, main_clip], method="compose", padding=0
+                        )
+
+                    # 调整背景音乐起始时间：
+                    # 时间轴: [片头视频] ([定格/重叠部分]) [正片...]
+                    # 我们希望 BGM 在正片开始浮现时切入？
+                    # 还是在片头视频动作结束时切入？
+                    # 现在的逻辑是：片头视频播放完毕 -> 定格开始 -> BGM 开始。
+                    bgm_start_time += intro_clip.duration
 
                 except Exception as e:
                     logger.error(f"Failed to add custom intro video: {e}")

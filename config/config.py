@@ -99,6 +99,11 @@ class Config:
     # 动画设置
     ANIMATOR_TYPE: str = "mock"  # luma, stability, mock
 
+    # 语音设置
+    TTS_PROVIDER: str = "edge"  # edge, azure
+    AZURE_TTS_KEY: str = os.getenv("AZURE_TTS_KEY", "")
+    AZURE_TTS_REGION: str = os.getenv("AZURE_TTS_REGION", "eastus")
+
     # 音频设置
     TTS_VOICE: str = "zh-CN-XiaoxiaoNeural"  # 默认语音
     TTS_VOICE_TITLE: str = "zh-CN-XiaoxiaoNeural"  # 默认标题语音
@@ -194,6 +199,12 @@ class Config:
                 "category_layouts", {}
             )  # 加载布局
             self.ANIMATOR_TYPE = data["models"].get("animator", self.ANIMATOR_TYPE)
+            self.TTS_PROVIDER = data["models"].get("tts_provider", self.TTS_PROVIDER)
+            self.AZURE_TTS_KEY = data["models"].get("azure_tts_key", self.AZURE_TTS_KEY)
+            self.AZURE_TTS_REGION = data["models"].get(
+                "azure_tts_region", self.AZURE_TTS_REGION
+            )
+
             self.TTS_VOICE = data["models"].get("tts_voice", self.TTS_VOICE)
             self.TTS_VOICE_TITLE = data["models"].get(
                 "tts_voice_title", self.TTS_VOICE
