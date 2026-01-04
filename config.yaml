@@ -264,7 +264,7 @@ models:
     "民间故事": "guqin.mp3"
     "少儿百科": "playful.mp3"
     "读书分享": "meditation.mp3"
-    "有声读物": "lullaby.mp3"
+    "有声读物": "damiano.mp3"
 
   # 5.5 类目语速配置（TTS语速调整，负数=慢，正数=快）
   category_speech_rates:

@@ -23,7 +23,11 @@ class GenericVideoAssembler(VideoAssemblerBase):
         lines = [text[i : i + chars_per_line] for i in range(0, len(text), chars_per_line)]
         if not lines: return None
 
-        duration_per_line = duration / len(lines)
+        # Calculate total characters for proportional duration
+        total_chars = sum(len(x) for x in lines)
+        if total_chars == 0:
+            total_chars = 1
+
         font_size_hanzi = int(W * 0.045)
         font_size_pinyin = int(font_size_hanzi * 0.6)
         sub_height = int(font_size_hanzi + font_size_pinyin + 20)
@@ -39,6 +43,10 @@ class GenericVideoAssembler(VideoAssemblerBase):
         clips = []
 
         for line in lines:
+            line_len = len(line)
+            # Proportional duration
+            line_duration = duration * (line_len / total_chars)
+
             img = Image.new("RGBA", (W, sub_height), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
 
@@ -64,6 +72,23 @@ class GenericVideoAssembler(VideoAssemblerBase):
             y_base_pinyin = 5
             y_base_hanzi = y_base_pinyin + font_size_pinyin + 5
 
+            # Draw background box
+            box_pad_x = 10
+            box_pad_y = 5
+            box_left = start_x - box_pad_x
+            box_right = start_x + total_line_width + box_pad_x
+            box_top = y_base_pinyin - box_pad_y
+            box_bottom = (
+                y_base_hanzi + font_size_hanzi + box_pad_y + 4
+            )  # +4 for stroke buffer
+
+            draw.rounded_rectangle(
+                [(box_left, box_top), (box_right, box_bottom)],
+                radius=8,
+                fill=(0, 0, 0, 100),  # Semi-transparent black
+            )
+
+            current_x = start_x
             for item in char_data:
                 x_hanzi = current_x + (item["cell_w"] - item["w_char"]) / 2
                 draw_text(x_hanzi, y_base_hanzi, item["char"], font_hanzi, stroke=3)
@@ -72,7 +97,7 @@ class GenericVideoAssembler(VideoAssemblerBase):
                 current_x += item["cell_w"] + 2
 
             img_np = np.array(img)
-            clips.append(ImageClip(img_np).set_duration(duration_per_line))
+            clips.append(ImageClip(img_np).set_duration(line_duration))
 
         if not clips: return None
         final_clip = concatenate_videoclips(clips, method="compose")

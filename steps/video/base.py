@@ -681,6 +681,9 @@ class VideoAssemblerBase(ABC):
                 continue
             try:
                 audio_clip = AudioFileClip(scene.audio_path)
+                # Add micro-fadeout to prevent clicks/pops at segment boundaries
+                audio_clip = audio_clip.fx(afx.audio_fadeout, 0.05)
+
                 audio_padding = 0.5
                 duration = audio_clip.duration + audio_padding
                 actual_duration = duration  # Logic splits here slightly compared to old code but effectively same
@@ -689,7 +692,12 @@ class VideoAssemblerBase(ABC):
 
                 visual_clip = self._load_visual(scene, duration)
                 if visual_clip:
-                    visual_clip = visual_clip.set_audio(audio_clip)
+                    # Pad audio with silence to match video duration
+                    # This prevents glitches during crossfade/concat where audio < video
+                    padded_audio = CompositeAudioClip(
+                        [audio_clip.set_start(0)]
+                    ).set_duration(duration)
+                    visual_clip = visual_clip.set_audio(padded_audio)
 
                     # ABSTRACT METHOD CALL
                     visual_clip = self._compose_scene(scene, visual_clip, duration)
@@ -914,6 +922,8 @@ class VideoAssemblerBase(ABC):
 
                 if bgm_duration > 0:
                     bgm_clip = afx.audio_loop(bgm_clip, duration=bgm_duration)
+                    # Add fade out to BGM to avoid abrupt cut at end of video/outro
+                    bgm_clip = bgm_clip.fx(afx.audio_fadeout, 3.0)
                     bgm_clip = bgm_clip.volumex(0.15)
                     bgm_clip = bgm_clip.set_start(bgm_start_time)
 
