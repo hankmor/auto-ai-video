@@ -59,6 +59,13 @@ def parse_args():
         default=None,
     )
     parser.add_argument(
+        "--emotion",
+        "-E",
+        type=str,
+        help="【可选】TTS 情感参数（例如：happy, sad, angry）；仅部分火山引擎音色支持",
+        default=None,
+    )
+    parser.add_argument(
         "--step",
         "-e",
         type=str,

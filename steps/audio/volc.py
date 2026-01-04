@@ -22,7 +22,7 @@ class VolcAudioStudio(AudioStudioBase):
             logger.warning("VOLC_TTS_APPID or VOLC_TTS_TOKEN not configured.")
 
     async def generate_tts(
-        self, text: str, output_path: str, emotion: str = None
+        self, text: str, output_path: str, emotion: str = None, voice_type: str = None
     ) -> bool:
         """
         Generates TTS audio using Volcengine API.
@@ -35,10 +35,8 @@ class VolcAudioStudio(AudioStudioBase):
             # Prepare request
             # Ref: https://www.volcengine.com/docs/6561/96752
 
-            # TODO: Emotion mapping if Volcengine supports it via SSML or params.
-            # Volcengine generally sets emotion via 'emotion' param in request, NOT standard SSML.
-            # Supported emotions depend on the voice.
-            # We will pass 'emotion' if config enables it.
+            # Determine effective voice type
+            effective_voice = voice_type if voice_type else self.voice_type
 
             header = {"Authorization": f"Bearer;{self.token}"}
 
@@ -50,7 +48,7 @@ class VolcAudioStudio(AudioStudioBase):
                 },
                 "user": {"uid": "auto_ai_video_user"},
                 "audio": {
-                    "voice_type": self.voice_type,
+                    "voice_type": effective_voice,
                     "encoding": "mp3",
                     "speed_ratio": 1.0,
                     "volume_ratio": 1.0,
@@ -130,8 +128,44 @@ class VolcAudioStudio(AudioStudioBase):
         logger.info(f"Generating Volcengine audio for Scene {scene.scene_id}...")
 
         try:
-            emotion = getattr(scene, "emotion", None)
-            success = await self.generate_tts(text, output_path, emotion)
+            # Determine effective emotion
+            # Priority: CLI Argument (--emotion) > Scene Attribute (Script) > None
+            emotion = (
+                C.TTS_EMOTION if C.TTS_EMOTION else getattr(scene, "emotion", None)
+            )
+
+            # Determine appropriate voice
+            # 1. Try to find a voice for the category
+            category_voices = C.CATEGORY_VOICES.get(C.CURRENT_CATEGORY, [])
+            current_voice_type = self.voice_type  # Default Fallback
+
+            if category_voices:
+                # Use the first voice in the list for consistency, or random?
+                # For Volc, we usually want consistency per video so first one is safer.
+                # If we want random per video, we should have decided that earlier.
+                # But here we are generating per scene. Switching voices mid-video (if random) is bad.
+                current_voice_type = category_voices[0]
+                logger.debug(f"Volc using category voice: {current_voice_type}")
+
+            # TODO: Map scene.character to specific voice if multiple characters exist
+
+            # Temporarily set instance voice_type for this call?
+            # No, 'generate_tts' uses instance attributes implicitly?
+            # Wait, 'generate_tts' uses 'self.voice_type'.
+            # I should modify 'generate_tts' to accept 'voice_type' argument or change 'self.voice_type' temporarily.
+            # Ideally 'generate_tts' should accept 'voice_type'.
+
+            # Modifying generate_tts signature is cleaner.
+            # Or just update self.voice_type? No, that's not thread safe (though asyncio here is single threaded mostly).
+            # Let's update generate_tts signature in a separate edit, or hack it here.
+            # Actually looking at generate_tts implementation (lines 24-112), it uses self.voice_type.
+
+            # Hack: Pass it via a private method or modify generate_tts now.
+            # I will modify generate_tts signature in this same file.
+
+            success = await self.generate_tts(
+                text, output_path, emotion, voice_type=current_voice_type
+            )
 
             if not success:
                 raise Exception("Volc TTS returned false")
@@ -140,6 +174,7 @@ class VolcAudioStudio(AudioStudioBase):
 
         except Exception as e:
             logger.error(f"Failed to generate audio for Scene {scene.scene_id}: {e}")
+            raise e
 
     async def generate_audio(self, scenes: List[Scene], force: bool = False):
         logger.info(f"Starting Volcengine audio generation for {len(scenes)} scenes...")

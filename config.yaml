@@ -202,7 +202,7 @@ models:
 
   # 语音模型配置
   # 可选值: "edge" (免费, 推荐), "azure" (付费, 支持情感), "volc" (火山引擎, 强烈推荐)
-  tts_provider: "volc"
+  tts_provider: "edge"
   tts_voice: "zh-CN-YunxiNeural" # 全局默认
   tts_voice_title: "zh-CN-XiaoxiaoNeural"
 
@@ -212,13 +212,13 @@ models:
 
   # Volcengine (火山引擎) TTS 配置
   # 需要在控制台创建“语音技术”应用，获取 AppID 和 AccessToken
-  volc_tts_appid: "YOUR_APPID" # appid
-  volc_tts_token: "YOUR_ACCESS_TOKEN" # accessToken
-  # 推荐音色:
+  volc_tts_appid: "" # appid
+  volc_tts_token: "" # accessToken
+  # 推荐音色: https://www.volcengine.com/docs/6561/1257544?lang=zh
   #灿灿 (BV701_streaming) - 阳光男声(激情)
   #在大 (BV051_streaming) - 沉稳男声(历史)
   #小艺 (BV123_streaming) - 甜美女声(绘本)
-  volc_tts_voice_type: "BV701_streaming" # 默认音色 ID (灿灿-适合激情解说)
+  volc_tts_voice_type: "zh_male_dayi_saturn_bigtts" # 默认音色 ID (灿灿-适合激情解说)
   volc_tts_cluster: "volcano_tts" # 默认集群
 
   # 随机池配置 (Random Pools) -> 现在改为单选特定语音
@@ -236,6 +236,20 @@ models:
     "少儿百科": ["zh-CN-YunxiaNeural"] # 云夏：聪明少年
     "读书分享": ["zh-CN-YunxiNeural"] # 云希：亲切分享
     "有声读物": ["zh-CN-XiaoxiaoNeural"] # 晓晓：温柔讲述
+
+  category_voices_volc:
+    "成语故事": ["zh_male_dayi_saturn_bigtts"] # 灿灿
+    "历史故事": ["zh_male_ruyayichen_saturn_bigtts"] # 大
+    "睡前故事": ["zh_female_santongyongns_saturn_bigtts"] # 梓梓
+    "儿童绘本": ["zh_female_xueayi_saturn_bigtts"] # 儿童绘本
+    "漫画解说": ["zh_female_xiaohe_uranus_bigtts"] # 强哥
+    "助眠冥想": ["zh_male_m191_uranus_bigtts"] # 梓梓
+    "英语绘本": ["zh_female_yingyujiaoyu_mars_bigtts"] # (Generic EN)
+    "神话故事": ["zh_male_taocheng_uranus_bigtts"] # 大
+    "民间故事": ["zh_male_dayi_saturn_bigtts"] # 灿灿
+    "少儿百科": ["zh_female_santongyongns_saturn_bigtts"] # 灿灿
+    "读书分享": ["saturn_zh_female_keainvsheng_tob"] # 梓梓
+    "有声读物": ["saturn_zh_female_tiaopigongzhu_tob"] # 梓梓
 
   # 5. 背景音乐映射 (分类 -> assets/music/ 中的文件名)
   category_bgm:

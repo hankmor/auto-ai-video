@@ -40,6 +40,7 @@ def main():
         style_arg=args.style,
         enable_subs=args.subtitles,
         voice_arg=args.voice,
+        emotion_arg=args.emotion,
     )
 
     loop = asyncio.get_event_loop()

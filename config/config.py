@@ -107,12 +107,13 @@ class Config:
     # 火山 TTS
     VOLC_TTS_APPID: str = os.getenv("VOLC_TTS_APPID", "")
     VOLC_TTS_TOKEN: str = os.getenv("VOLC_TTS_TOKEN", "")
-    VOLC_TTS_VOICE_TYPE: str = "BV701_streaming"
-    VOLC_TTS_CLUSTER: str = "volcano_tts"
+    VOLC_TTS_VOICE_TYPE: str = "zh_male_dayi_saturn_bigtts"
+    VOLC_TTS_CLUSTER: str = os.getenv("VOLC_TTS_CLUSTER", "volcano_tts")
 
     # 音频设置
     TTS_VOICE: str = "zh-CN-XiaoxiaoNeural"  # 默认语音
     TTS_VOICE_TITLE: str = "zh-CN-XiaoxiaoNeural"  # 默认标题语音
+    TTS_EMOTION: Optional[str] = None  # 情感参数 (Global Override)
 
     # 功能标志
     ENABLE_ANIMATION: bool = True
@@ -196,7 +197,17 @@ class Config:
 
             self.STYLES = data["models"].get("styles", {})
             self.CATEGORY_DEFAULTS = data["models"].get("category_defaults", {})
-            self.CATEGORY_VOICES = data["models"].get("category_voices", {})
+            # Load Voices based on Provider
+            # If provider is volc, try to load category_voices_volc
+            if self.TTS_PROVIDER == "volc":
+                volc_voices = data["models"].get("category_voices_volc", {})
+                if volc_voices:
+                    self.CATEGORY_VOICES = volc_voices
+                    logger.info("🎙️ Loaded Volcengine Voice Mappings")
+                else:
+                    self.CATEGORY_VOICES = data["models"].get("category_voices", {})
+            else:
+                self.CATEGORY_VOICES = data["models"].get("category_voices", {})
             self.CATEGORY_BGM = data["models"].get("category_bgm", {})
             self.CATEGORY_ALIASES = data["models"].get(
                 "category_aliases", {}
@@ -211,17 +222,25 @@ class Config:
                 "azure_tts_region", self.AZURE_TTS_REGION
             )
 
-            self.VOLC_TTS_APPID = data["models"].get(
-                "volc_tts_appid", self.VOLC_TTS_APPID
+            # 只有当 YAML 中有值且非空时才覆盖，否则保留环境变量的值
+            self.VOLC_TTS_APPID = (
+                data["models"].get("volc_tts_appid") or self.VOLC_TTS_APPID
             )
-            self.VOLC_TTS_TOKEN = data["models"].get(
-                "volc_tts_token", self.VOLC_TTS_TOKEN
+            self.VOLC_TTS_TOKEN = (
+                data["models"].get("volc_tts_token") or self.VOLC_TTS_TOKEN
             )
-            self.VOLC_TTS_VOICE_TYPE = data["models"].get(
-                "volc_tts_voice_type", self.VOLC_TTS_VOICE_TYPE
+
+            # Voice Type 默认值如果是空字符串可能不合适，但这里主要防止 YAML 空串覆盖代码默认值
+            self.VOLC_TTS_VOICE_TYPE = (
+                data["models"].get("volc_tts_voice_type") or self.VOLC_TTS_VOICE_TYPE
             )
-            self.VOLC_TTS_CLUSTER = data["models"].get(
-                "volc_tts_cluster", self.VOLC_TTS_CLUSTER
+
+            self.VOLC_TTS_CLUSTER = (
+                data["models"].get("volc_tts_cluster") or self.VOLC_TTS_CLUSTER
+            )
+
+            logger.debug(
+                f"Volc Config Loaded -> appid: {self.VOLC_TTS_APPID}, cluster: {self.VOLC_TTS_CLUSTER}"
             )
 
             self.TTS_VOICE = data["models"].get("tts_voice", self.TTS_VOICE)

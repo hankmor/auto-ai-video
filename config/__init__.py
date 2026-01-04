@@ -10,6 +10,7 @@ def setup(
     style_arg: str = None,
     enable_subs: bool = False,
     voice_arg: str = None,
+    emotion_arg: str = None,
 ):
     """
     设置输出目录并配置图像风格。
@@ -46,6 +47,11 @@ def setup(
             )
 
     C.TTS_VOICE = final_voice
+
+    # --- TTS 情感配置 ---
+    if emotion_arg:
+        C.TTS_EMOTION = emotion_arg
+        logger.info(f"🎭 Using TTS Emotion Override: {C.TTS_EMOTION}")
 
     # 1. 设置目录
     # 清理主题以用作文件夹名称
