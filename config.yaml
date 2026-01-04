@@ -201,15 +201,25 @@ models:
   # -------------------------------------------------------------------------
 
   # 语音模型配置
-  # 可选值: "edge" (免费, 推荐), "azure" (付费, 支持情感)
-  tts_provider: "edge"
-
-  # Azure TTS 配置 (仅当 tts_provider 为 "azure" 时需要)
-  azure_tts_key: "YOUR_AZURE_KEY"
-  azure_tts_region: "eastus"
-
+  # 可选值: "edge" (免费, 推荐), "azure" (付费, 支持情感), "volc" (火山引擎, 强烈推荐)
+  tts_provider: "volc"
   tts_voice: "zh-CN-YunxiNeural" # 全局默认
   tts_voice_title: "zh-CN-XiaoxiaoNeural"
+
+  # Azure TTS 配置
+  azure_tts_key: ""
+  azure_tts_region: "eastus"
+
+  # Volcengine (火山引擎) TTS 配置
+  # 需要在控制台创建“语音技术”应用，获取 AppID 和 AccessToken
+  volc_tts_appid: "YOUR_APPID" # appid
+  volc_tts_token: "YOUR_ACCESS_TOKEN" # accessToken
+  # 推荐音色:
+  #灿灿 (BV701_streaming) - 阳光男声(激情)
+  #在大 (BV051_streaming) - 沉稳男声(历史)
+  #小艺 (BV123_streaming) - 甜美女声(绘本)
+  volc_tts_voice_type: "BV701_streaming" # 默认音色 ID (灿灿-适合激情解说)
+  volc_tts_cluster: "volcano_tts" # 默认集群
 
   # 随机池配置 (Random Pools) -> 现在改为单选特定语音
   # 系统会从对应的列表中随机抽取一个声音 (这里列表只给一个，实现固定声音)
@@ -326,8 +336,8 @@ features:
     - "assets/videos/5.mp4"
   # 你的片头视频文件路径 (默认/通用)，支持列表随机选择
   # category_intros:# 单独的设置每一个类目的视频
-    # "成语故事": "assets/videos/cy.mp4"
-    # "历史故事": "assets/videos/history_intro.mp4"
+  # "成语故事": "assets/videos/cy.mp4"
+  # "历史故事": "assets/videos/history_intro.mp4"
   custom_intro_transition: "crossfade" # 转场效果: crossfade (叠化), none (硬切)
   custom_intro_transition_duration: -1.5 # 转场持续时间
   # 自定义片头配音 (新功能)

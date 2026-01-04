@@ -30,7 +30,10 @@ def main():
         cover_subtitle = subtitle
 
     # 目录使用“干净主题 + 副标题”以隔离不同章节产物
-    clean_full_topic = f"{main_topic}:{subtitle}" if subtitle else main_topic
+    # 优先使用 cover_title (Short) 作为目录名，除非未提供
+    topic_for_path = cover_title if cover_title else main_topic
+    clean_full_topic = f"{topic_for_path}:{subtitle}" if subtitle else topic_for_path
+
     config.setup(
         category=args.category,
         topic=clean_full_topic,
@@ -42,22 +45,27 @@ def main():
     loop = asyncio.get_event_loop()
 
     # 兼容 Python 3.9：避免使用 match/case
+    # NOTE: pass cover_title as the primary 'topic' for steps if available,
+    # so that script.json records the short title and output paths use it.
+    # The full context is passed via 'context_topic'.
+    step_topic = cover_title if cover_title else main_topic
+
     if args.step == step.SCRIPT:
         loop.run_until_complete(
-            step.run_step_script(main_topic, subtitle, args.force, context_topic)
+            step.run_step_script(step_topic, subtitle, args.force, context_topic)
         )
     elif args.step == step.IMAGE:
-        loop.run_until_complete(step.run_step_image(main_topic, args.force))
+        loop.run_until_complete(step.run_step_image(step_topic, args.force))
     elif args.step == step.ANIMATE:
-        loop.run_until_complete(step.run_step_animate(main_topic))
+        loop.run_until_complete(step.run_step_animate(step_topic))
     elif args.step == step.AUDIO:
-        loop.run_until_complete(step.run_step_audio(main_topic, args.force))
+        loop.run_until_complete(step.run_step_audio(step_topic, args.force))
     elif args.step == step.VIDEO:
         loop.run_until_complete(step.run_step_video(cover_title, cover_subtitle))
     elif args.step == step.ALL:
         loop.run_until_complete(
             step.run_all_with_cover(
-                topic=main_topic,
+                topic=step_topic,
                 subtitle=subtitle,
                 force=args.force,
                 context_topic=context_topic,

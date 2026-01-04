@@ -11,8 +11,21 @@ class GenericScriptGenerator(ScriptGeneratorBase):
         category: str, 
         topic_display: str
     ) -> str:
-        
+        special_instruction = ""
+        if category == "有声读物":
+            special_instruction = f"""
+            ⚠️ 【有声读物特别指令】 ⚠️
+            用户提供的“主题”包含了详细的书籍/故事信息（来源、出版社、情节概要等）：
+            >>> {topic}
+            
+            1. **必须理解并利用这些信息**：如果包含了来源（如“中国出版集团”），请在适当位置（如开头或结尾的旁白）提及，确立权威感。
+            2. **忠实原作逻辑**：请根据上述提供的情节概要进行扩展，不要凭空捏造与提供信息冲突的剧情。
+            3. **深度理解**：AI 必须表现出“懂”这个故事。如果信息中包含特定的教育意义、道理或背景，请务必在脚本中体现出来。
+            """
+
         prompt = f"""请为主题【{topic_display}】编写一个详细的视频脚本。
+        {special_instruction}
+        
         要求：
         1. 严格遵守上述 SYSTEM PROMPT 的所有规则（场景数量、JSON格式、时长限制）。
         2. 这是一个“{category}”类视频，请务必使用对应的语言风格和画面风格。

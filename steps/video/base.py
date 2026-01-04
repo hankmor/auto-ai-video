@@ -249,12 +249,19 @@ class VideoAssemblerBase(ABC):
 
     def create_brand_outro(self, duration: float = 4.0, platform: str = "general"):
         try:
-            logo_path = os.path.join("brand", "logo_gemini_magic_storybook.png")
+            # Modified to use existing asset
+            logo_path = os.path.join(C.ASSETS_DIR, "image", "logo.png")
+
             if not os.path.exists(logo_path):
+                logger.warning(f"⚠️ Brand Outro Skipped: Logo not found at {logo_path}")
                 return None
+
             width, height = C.VIDEO_SIZE
-            brand_dir = "brand"
+
+            # Use separate brand dir for generated cache to avoid polluting assets
+            brand_dir = os.path.join(C.OUTPUT_DIR, "brand_cache")
             os.makedirs(brand_dir, exist_ok=True)
+
             bg_path = os.path.join(brand_dir, "outro_bg.png")
             text_path = os.path.join(brand_dir, f"outro_text_{platform}.png")
 
@@ -290,7 +297,7 @@ class VideoAssemblerBase(ABC):
                 )
 
                 font_medium = font_manager.get_font("chinese", 60)
-                like_text = "记得点赞关注哦 ❤️"
+                like_text = "记得点赞关注哦"
                 bbox = text_draw.textbbox((0, 0), like_text, font=font_medium)
                 text_draw.text(
                     ((width - (bbox[2] - bbox[0])) // 2, 180),
@@ -899,12 +906,29 @@ class VideoAssemblerBase(ABC):
             try:
                 bgm_clip = AudioFileClip(bgm_file)
                 bgm_duration = max(0, final_clip.duration - bgm_start_time)
+
+                logger.info(f"🎶 BGM Logic: File={bgm_file}")
+                logger.info(f"   Start Time={bgm_start_time:.2f}s")
+                logger.info(f"   Final Clip Duration={final_clip.duration:.2f}s")
+                logger.info(f"   Calculated BGM Duration={bgm_duration:.2f}s")
+
                 if bgm_duration > 0:
                     bgm_clip = afx.audio_loop(bgm_clip, duration=bgm_duration)
                     bgm_clip = bgm_clip.volumex(0.15)
                     bgm_clip = bgm_clip.set_start(bgm_start_time)
-                    final_audio = CompositeAudioClip([final_clip.audio, bgm_clip])
+
+                    # Mix BGM with existing audio
+                    # Ensure final_clip has audio (it should from scenes/intro)
+                    original_audio = final_clip.audio
+                    if original_audio:
+                        final_audio = CompositeAudioClip([original_audio, bgm_clip])
+                    else:
+                        final_audio = bgm_clip
+
                     final_clip = final_clip.set_audio(final_audio)
+                    logger.info("   ✅ BGM mixed successfully.")
+                else:
+                    logger.warning("   ⚠️ BGM duration <= 0, skipping mix.")
             except Exception as e:
                 logger.error(f"Failed to mix BGM: {e}")
 

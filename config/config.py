@@ -44,8 +44,8 @@ MODEL_VOLCENGINE_ACT_M1 = "jimeng_dream_actor_m1_gen_video_cv"
 
 @dataclass
 class Config:
-    # 项目路径
-    ROOT_DIR: str = os.path.dirname(os.path.abspath(__file__))
+    # 项目路径 (Correctly points to project root, not config dir)
+    ROOT_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ASSETS_DIR: str = os.path.join(ROOT_DIR, "assets")
 
     # 默认为当前目录的输出，或者从 yaml 加载
@@ -103,6 +103,12 @@ class Config:
     TTS_PROVIDER: str = "edge"  # edge, azure
     AZURE_TTS_KEY: str = os.getenv("AZURE_TTS_KEY", "")
     AZURE_TTS_REGION: str = os.getenv("AZURE_TTS_REGION", "eastus")
+
+    # 火山 TTS
+    VOLC_TTS_APPID: str = os.getenv("VOLC_TTS_APPID", "")
+    VOLC_TTS_TOKEN: str = os.getenv("VOLC_TTS_TOKEN", "")
+    VOLC_TTS_VOICE_TYPE: str = "BV701_streaming"
+    VOLC_TTS_CLUSTER: str = "volcano_tts"
 
     # 音频设置
     TTS_VOICE: str = "zh-CN-XiaoxiaoNeural"  # 默认语音
@@ -203,6 +209,19 @@ class Config:
             self.AZURE_TTS_KEY = data["models"].get("azure_tts_key", self.AZURE_TTS_KEY)
             self.AZURE_TTS_REGION = data["models"].get(
                 "azure_tts_region", self.AZURE_TTS_REGION
+            )
+
+            self.VOLC_TTS_APPID = data["models"].get(
+                "volc_tts_appid", self.VOLC_TTS_APPID
+            )
+            self.VOLC_TTS_TOKEN = data["models"].get(
+                "volc_tts_token", self.VOLC_TTS_TOKEN
+            )
+            self.VOLC_TTS_VOICE_TYPE = data["models"].get(
+                "volc_tts_voice_type", self.VOLC_TTS_VOICE_TYPE
+            )
+            self.VOLC_TTS_CLUSTER = data["models"].get(
+                "volc_tts_cluster", self.VOLC_TTS_CLUSTER
             )
 
             self.TTS_VOICE = data["models"].get("tts_voice", self.TTS_VOICE)

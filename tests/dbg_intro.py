@@ -70,6 +70,7 @@ def main():
     # C.VIDEO_SIZE = (1080, 1920)  # Target 9:16 - Commented out to test config loading
     print(f"DEBUG: C.VIDEO_SIZE from config: {getattr(C, 'VIDEO_SIZE', 'NOT SET')}")
     C.ENABLE_CUSTOM_INTRO = True
+    C.ENABLE_BRAND_OUTRO = True  # Enable Outro
 
     # 显式设置转场参数以方便观察
     # 设置较长的转场时间 (2.0秒) 以便清晰看到叠加淡入效果
