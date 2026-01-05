@@ -15,13 +15,30 @@ class BookVideoAssembler(VideoAssemblerBase):
         narration_cn = getattr(scene, "narration_cn", "")
         # Use C.VIDEO_SIZE for consistent video dimensions
         video_size = C.VIDEO_SIZE if hasattr(C, "VIDEO_SIZE") else visual_clip.size
-        return self.create_book_layout_clip(
-            visual_clip,
-            scene.narration,
-            duration,
-            video_size,
-            subtitle_cn=narration_cn,
+
+        logger.info(
+            f"📖 BookVideoAssembler._compose_scene: 准备调用 create_book_layout_clip"
         )
+        logger.info(
+            f"   video_size={video_size}, narration='{scene.narration[:30]}...', narration_cn='{narration_cn[:20]}...'"
+        )
+
+        try:
+            result = self.create_book_layout_clip(
+                visual_clip,
+                scene.narration,
+                duration,
+                video_size,
+                subtitle_cn=narration_cn,
+            )
+            logger.info(f"   ✅ create_book_layout_clip 调用成功")
+            return result
+        except Exception as e:
+            logger.error(f"   ❌ create_book_layout_clip 调用失败: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return visual_clip
 
     def create_book_layout_clip(
         self,
@@ -39,6 +56,14 @@ class BookVideoAssembler(VideoAssemblerBase):
         scale_w = W / src_w
         scale_h = H / src_h
         scale = max(scale_w, scale_h)  # Use max to ensure full coverage
+
+        # 🔍 调试日志
+        logger.info(
+            f"📝 字幕渲染: text='{text[:30]}...', subtitle_cn='{subtitle_cn[:20] if subtitle_cn else 'None'}...'"
+        )
+        logger.info(
+            f"   双语模式={C.ENABLE_BILINGUAL_MODE}, has_subtitle_cn={bool(subtitle_cn)}"
+        )
 
         scaled_clip = visual_clip.resize(scale)
         scaled_w, scaled_h = scaled_clip.size
@@ -92,8 +117,23 @@ class BookVideoAssembler(VideoAssemblerBase):
             if current_line:
                 lines.append(" ".join(current_line))
 
-            # Draw English
+            # 🔥 添加黑色半透明背景框
             line_height = int(base_font_size * 1.3)
+            total_text_h = len(lines) * line_height + 40  # English
+            # 预估中文高度（简化）
+            chinese_h = int(base_font_size * 0.8) + int(base_font_size * 0.8 * 0.6) + 30
+            total_content_h = total_text_h + chinese_h
+
+            box_pad = 15
+            bg_box = [
+                pane_x_margin,
+                text_start_y - box_pad,
+                W - pane_x_margin,
+                text_start_y + total_content_h + box_pad,
+            ]
+            draw.rounded_rectangle(bg_box, radius=10, fill=(0, 0, 0, 140))
+
+            # Draw English
             current_y = text_start_y
 
             for line in lines:

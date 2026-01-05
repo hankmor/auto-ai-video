@@ -36,57 +36,6 @@ class VideoAssemblerBase(ABC):
     def __init__(self):
         pass
 
-    def _generate_intro_dub_sync(self, text, output_path):
-        """
-        同步生成片头配音音频
-        Synchronously generate intro dubbing audio
-        """
-        voice = getattr(C, "CUSTOM_INTRO_DUB_VOICE", "zh-CN-YunxiaNeural")
-        # Default config values
-        pitch = getattr(C, "CUSTOM_INTRO_DUB_PITCH", "+0Hz")
-        rate = getattr(C, "CUSTOM_INTRO_DUB_RATE", "+0%")
-        style = getattr(C, "CUSTOM_INTRO_DUB_STYLE", "")
-
-        # Style presets map (Mocking style with prosody)
-        # Since Edge-TTS often ignores or bans 'express-as' SSML, we simulate it.
-        STYLE_PROSODY = {
-            "excited": {"pitch": "+5Hz", "rate": "+15%"},
-            "cheerful": {"pitch": "+3Hz", "rate": "+10%"},
-            "friendly": {"pitch": "+2Hz", "rate": "+5%"},
-            "sad": {"pitch": "-5Hz", "rate": "-10%"},
-            "fearful": {"pitch": "+10Hz", "rate": "+15%"},
-            "angry": {"pitch": "+5Hz", "rate": "+20%"},
-        }
-
-        # Apply style override if exists
-        if style:
-            # Normalize to lowercase
-            s = style.lower()
-            if s in STYLE_PROSODY:
-                preset = STYLE_PROSODY[s]
-                pitch = preset["pitch"]
-                rate = preset["rate"]
-                logger.debug(f"🎭 Applied style '{s}' -> pitch: {pitch}, rate: {rate}")
-
-        async def _gen():
-            communicate = edge_tts.Communicate(text, voice, pitch=pitch, rate=rate)
-            await communicate.save(output_path)
-
-        try:
-            # Check for existing event loop
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    pass
-            except:
-                pass
-
-            asyncio.run(_gen())
-            return True
-        except Exception as e:
-            logger.error(f"Intro Dub Gen Failed: {e}")
-            return False
-
     @abstractmethod
     def _compose_scene(
         self, scene: Scene, visual_clip: VideoClip, duration: float
@@ -781,6 +730,457 @@ class VideoAssemblerBase(ABC):
             logger.error(f"Failed to generate cover: {e}")
             return False
 
+    # ===================================================================
+    # 辅助方法：用于 assemble_video 的各个步骤
+    # ===================================================================
+
+    def _setup_transition_config(self, category: str):
+        """配置转场类型和参数"""
+        trans_type = "none"
+        trans_duration, padding = 0.0, 0.0
+
+        if (
+            category
+            and hasattr(C, "CATEGORY_TRANSITIONS")
+            and category in C.CATEGORY_TRANSITIONS
+        ):
+            trans_type = C.CATEGORY_TRANSITIONS[category]
+
+        if trans_type == "crossfade":
+            trans_duration, padding = 0.8, -0.8
+        elif trans_type == "crossfade_slow":
+            trans_duration, padding = 1.5, -1.5
+        elif trans_type == "circle_open":
+            trans_duration, padding = 1.2, -1.0
+        elif trans_type == "page_turn":
+            trans_duration, padding = 0.8, 0.0
+
+        return trans_type, trans_duration, padding
+
+    def _generate_cover_clip(self, scenes: List[Scene], topic: str, subtitle: str):
+        """生成封面 clip"""
+        cover_path = os.path.join(C.OUTPUT_DIR, "cover.png")
+
+        if not os.path.exists(cover_path):
+            logger.info("Generating Video Cover in Assembly Phase...")
+            base_image = next(
+                (
+                    s.image_path
+                    for s in scenes
+                    if s.image_path and os.path.exists(s.image_path)
+                ),
+                None,
+            )
+
+            if base_image:
+                self.generate_cover(
+                    image_path=base_image,
+                    title=topic or "Untitled",
+                    output_path=cover_path,
+                    subtitle=subtitle,
+                )
+            else:
+                logger.warning("No scene image available for cover generation.")
+
+        if os.path.exists(cover_path):
+            try:
+                cover_clip = ImageClip(cover_path)
+
+                # 🔥 关键修复：确保封面也缩放到 VIDEO_SIZE
+                if hasattr(C, "VIDEO_SIZE"):
+                    target_w, target_h = C.VIDEO_SIZE
+                    curr_w, curr_h = cover_clip.size
+
+                    if curr_w != target_w or curr_h != target_h:
+                        logger.info(
+                            f"📐 封面缩放: {curr_w}x{curr_h} -> {target_w}x{target_h}"
+                        )
+
+                        # Aspect Fill
+                        scale = max(target_w / curr_w, target_h / curr_h)
+                        new_w, new_h = int(curr_w * scale), int(curr_h * scale)
+
+                        cover_clip = cover_clip.resize(newsize=(new_w, new_h))
+
+                        # Center crop
+                        if new_w != target_w or new_h != target_h:
+                            cover_clip = cover_clip.crop(
+                                x_center=new_w / 2,
+                                y_center=new_h / 2,
+                                width=target_w,
+                                height=target_h,
+                            )
+
+                # 🔥 添加封面朗读音频
+                duration = 2.5
+                if topic:
+                    cover_audio_path = os.path.join(C.OUTPUT_DIR, "cover_title.mp3")
+                    logger.info(f"🎤 生成封面朗读: {topic}")
+                    if self._generate_intro_dub_sync(
+                        text=topic,
+                        output_path=cover_audio_path,
+                        # 使用旁白音色或默认音色
+                        voice=None,
+                    ):
+                        if os.path.exists(cover_audio_path):
+                            audio_clip = AudioFileClip(cover_audio_path)
+                            cover_clip = cover_clip.set_audio(audio_clip)
+                            # 确保封面时长至少为2.5秒，或音频时长+0.5秒缓冲
+                            duration = max(2.5, audio_clip.duration + 0.5)
+                            logger.info(
+                                f"   封面朗读时长: {audio_clip.duration:.2f}s -> 封面总时长: {duration:.2f}s"
+                            )
+
+                return cover_clip.set_duration(duration).fadein(0.5).fadeout(0.5)
+            except Exception as e:
+                logger.error(f"Failed to load cover image: {e}")
+        return None
+
+    def _process_scenes(
+        self,
+        scenes: List[Scene],
+        action_map: dict,
+        trans_type: str,
+        trans_duration: float,
+        padding: float,
+    ):
+        """批量处理场景，返回 clips 列表"""
+        clips = []
+        prev_scene_node = None
+
+        for i, scene in enumerate(scenes):
+            if not scene.audio_path:
+                continue
+            try:
+                # 解析运镜动作
+                raw_action = getattr(scene, "camera_action", "zoom_in")
+                scene.camera_action = action_map.get(raw_action, "zoom_in")
+
+                # 加载音频并计算时长
+                audio_clip = AudioFileClip(scene.audio_path).fx(afx.audio_fadeout, 0.05)
+                duration = audio_clip.duration + 0.5  # audio_padding
+                if padding < 0 and i > 0:
+                    duration += abs(padding)
+
+                # 加载视觉
+                visual_clip = self._load_visual(scene, duration)
+                if not visual_clip:
+                    continue
+
+                # 设置音频
+                padded_audio = CompositeAudioClip(
+                    [audio_clip.set_start(0)]
+                ).set_duration(duration)
+                visual_clip = visual_clip.set_audio(padded_audio).set_duration(duration)
+
+                # 合成场景（添加字幕等）
+                logger.info(
+                    f"🎨 正在合成场景 {scene.scene_id}，narration='{scene.narration[:30]}...', narration_cn='{getattr(scene, 'narration_cn', 'N/A')[:20]}...'"
+                )
+                visual_clip = self._compose_scene(scene, visual_clip, duration)
+                logger.info(f"   ✅ 场景 {scene.scene_id} 合成完成")
+
+                # 翻书转场
+                if trans_type == "page_turn" and prev_scene_node:
+                    trans_clip = self.create_page_flip_transition(
+                        prev_scene_node.image_path, scene.image_path, trans_duration
+                    )
+                    if trans_clip:
+                        clips.append(trans_clip)
+
+                # 重叠转场效果
+                if padding < 0 and i > 0:
+                    if trans_type == "circle_open":
+                        visual_clip = self.apply_circle_open(visual_clip, abs(padding))
+                    elif trans_type.startswith("crossfade"):
+                        visual_clip = visual_clip.crossfadein(abs(padding))
+
+                clips.append(visual_clip)
+                prev_scene_node = scene
+
+            except Exception as e:
+                logger.error(f"Error processing scene {scene.scene_id}: {e}")
+
+        return clips
+
+    def _add_brand_outro(self, clips: List):
+        """添加品牌片尾"""
+        if not C.ENABLE_BRAND_OUTRO:
+            return
+
+        try:
+            outro_clip = self.create_brand_outro(duration=4.0)
+            if outro_clip:
+                clips.append(outro_clip)
+                logger.info("✅ 品牌片尾已添加")
+            else:
+                logger.warning("⚠️ 品牌片尾生成失败")
+        except Exception as e:
+            logger.error(f"Failed to create brand outro: {e}")
+
+    def _add_custom_intro(self, main_clip, intro_hook: str, bgm_start_time: float):
+        """添加自定义片头视频，返回 (final_clip, new_bgm_start_time)"""
+        if not C.ENABLE_CUSTOM_INTRO:
+            return main_clip, bgm_start_time
+
+        intro_path = self._resolve_intro_path()
+        if not intro_path or not os.path.exists(intro_path):
+            if intro_path:
+                logger.warning(
+                    f"Custom intro enabled but file not found at {intro_path}"
+                )
+            return main_clip, bgm_start_time
+
+        try:
+            logger.info(f"Adding custom intro video from {intro_path}")
+            intro_clip = VideoFileClip(intro_path)
+
+            # 添加配音
+            intro_clip = self._add_intro_dubbing(intro_clip, intro_hook)
+
+            # 缩放到目标尺寸
+            intro_clip = self._resize_intro_to_target(intro_clip)
+
+            # 应用转场
+            final_clip, bgm_offset = self._apply_intro_transition(intro_clip, main_clip)
+
+            return final_clip, bgm_start_time + bgm_offset
+
+        except Exception as e:
+            logger.error(f"Failed to add custom intro video: {e}")
+            return main_clip, bgm_start_time
+
+    def _resolve_intro_path(self):
+        """解析片头视频路径"""
+        intro_path = None
+        category = getattr(C, "CURRENT_CATEGORY", "")
+
+        # 优先使用分类专属片头
+        if category and hasattr(C, "CATEGORY_INTROS") and category in C.CATEGORY_INTROS:
+            intro_path = C.CATEGORY_INTROS[category]
+
+        # 否则使用通用片头
+        if not intro_path:
+            generic_intro = getattr(C, "CUSTOM_INTRO_VIDEO_PATH", "")
+            if generic_intro:
+                import random
+
+                intro_path = (
+                    random.choice(generic_intro)
+                    if isinstance(generic_intro, list)
+                    else str(generic_intro)
+                )
+
+        # 转换为绝对路径
+        if intro_path and not os.path.isabs(intro_path):
+            base_dir = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
+            intro_path = os.path.join(base_dir, intro_path)
+
+        return intro_path
+
+    def _add_intro_dubbing(self, intro_clip, intro_hook: str):
+        """为片头添加配音"""
+        if not getattr(C, "ENABLE_CUSTOM_INTRO_DUB", False) or not intro_hook:
+            return intro_clip
+
+        logger.info(f"🧠 Using AI Generated Intro Hook: {intro_hook}")
+        logger.info(f"🎤 Generating Intro Dub: {intro_hook[:15]}...")
+
+        dub_audio_path = os.path.join(C.OUTPUT_DIR, "intro_hook_dub.mp3")
+
+        # 生成配音
+        if not self._generate_intro_dub_sync(
+            text=intro_hook,
+            output_path=dub_audio_path,
+            voice=getattr(C, "CUSTOM_INTRO_DUB_VOICE", None),
+            rate=getattr(C, "CUSTOM_INTRO_DUB_RATE", None),
+            pitch=getattr(C, "CUSTOM_INTRO_DUB_PITCH", None),
+        ):
+            return intro_clip
+
+        if not os.path.exists(dub_audio_path):
+            return intro_clip
+
+        new_audio = AudioFileClip(dub_audio_path)
+
+        # 如果音频过长，加速重新生成
+        if new_audio.duration > intro_clip.duration:
+            logger.info(
+                f"⚠️ Intro Audio ({new_audio.duration:.2f}s) > Video ({intro_clip.duration:.2f}s). Regenerating..."
+            )
+            new_audio = self._regenerate_faster_intro_dub(
+                new_audio, intro_clip, dub_audio_path, intro_hook
+            )
+
+        # 设置音频
+        intro_clip = intro_clip.without_audio().set_audio(new_audio)
+
+        # 🔥 关键修复：裁剪视频匹配音频长度
+        if intro_clip.duration > new_audio.duration:
+            logger.info(
+                f"✂️ 裁剪片头视频: {intro_clip.duration:.2f}s -> {new_audio.duration:.2f}s"
+            )
+            intro_clip = intro_clip.subclip(0, new_audio.duration)
+
+        return intro_clip
+
+    def _regenerate_faster_intro_dub(
+        self, old_audio, intro_clip, dub_audio_path, intro_hook
+    ):
+        """重新生成加速的片头配音"""
+        ratio = old_audio.duration / intro_clip.duration
+        current_rate_str = getattr(C, "CUSTOM_INTRO_DUB_RATE", "+0%")
+
+        try:
+            base_rate_val = int(current_rate_str.strip("%"))
+        except:
+            base_rate_val = 0
+
+        current_speed = 1.0 + (base_rate_val / 100.0)
+        target_speed = current_speed * ratio * 1.05  # 5% buffer
+        new_rate_str = f"{int((target_speed - 1.0) * 100):+d}%"
+
+        logger.info(
+            f"🔄 Regenerating Intro Dub with rate: {current_rate_str} -> {new_rate_str}"
+        )
+
+        old_audio.close()
+
+        if self._generate_intro_dub_sync(
+            text=intro_hook,
+            output_path=dub_audio_path,
+            voice=getattr(C, "CUSTOM_INTRO_DUB_VOICE", None),
+            rate=new_rate_str,
+            pitch=getattr(C, "CUSTOM_INTRO_DUB_PITCH", None),
+        ):
+            new_audio = AudioFileClip(dub_audio_path)
+            if new_audio.duration > intro_clip.duration:
+                logger.warning("⚠️ Audio still slightly longer. Trimming end.")
+                new_audio = new_audio.subclip(0, intro_clip.duration)
+            return new_audio
+        else:
+            logger.error("Failed to regenerate faster audio.")
+            return (
+                AudioFileClip(dub_audio_path)
+                if os.path.exists(dub_audio_path)
+                else old_audio
+            )
+
+    def _resize_intro_to_target(self, intro_clip):
+        """将片头视频缩放到目标尺寸（Aspect Fill）"""
+        if not hasattr(C, "VIDEO_SIZE"):
+            return intro_clip
+
+        target_w, target_h = C.VIDEO_SIZE
+        w, h = intro_clip.size
+
+        if w == target_w and h == target_h:
+            return intro_clip
+
+        # Aspect Fill: 缩放后裁剪
+        ratio_w, ratio_h = target_w / w, target_h / h
+        scale = max(ratio_w, ratio_h)
+        new_w, new_h = int(w * scale), int(h * scale)
+
+        logger.info(f"🎬 片头视频缩放: {w}x{h} -> {new_w}x{new_h} (scale={scale:.3f})")
+
+        if scale != 1.0:
+            intro_clip = intro_clip.resize(newsize=(new_w, new_h))
+
+        # Center crop
+        if new_w != target_w or new_h != target_h:
+            intro_clip = intro_clip.crop(
+                x_center=new_w / 2,
+                y_center=new_h / 2,
+                width=target_w,
+                height=target_h,
+            )
+
+        return intro_clip
+
+    def _apply_intro_transition(self, intro_clip, main_clip):
+        """应用片头转场效果，返回 (final_clip, bgm_offset)"""
+        intro_trans = getattr(C, "CUSTOM_INTRO_TRANSITION", "crossfade")
+        intro_trans_dur = abs(
+            float(getattr(C, "CUSTOM_INTRO_TRANSITION_DURATION", 0.8))
+        )
+
+        if intro_trans == "crossfade" and intro_trans_dur > 0:
+            # 延长片头：添加定格帧
+            last_frame_t = max(0, intro_clip.duration - 0.1)
+            last_frame_img = intro_clip.get_frame(last_frame_t)
+            freeze_clip = ImageClip(last_frame_img).set_duration(intro_trans_dur)
+
+            intro_extended = concatenate_videoclips([intro_clip, freeze_clip])
+            main_clip = main_clip.crossfadein(intro_trans_dur)
+
+            final_clip = concatenate_videoclips(
+                [intro_extended, main_clip],
+                method="compose",
+                padding=-intro_trans_dur,
+            )
+            return final_clip, intro_clip.duration
+        else:
+            # 硬切
+            return concatenate_videoclips(
+                [intro_clip, main_clip], method="compose", padding=0
+            ), intro_clip.duration
+
+    def _mix_background_music(self, final_clip, category: str, bgm_start_time: float):
+        """混合背景音乐"""
+        bgm_file = self._resolve_bgm_file(category)
+        if not bgm_file:
+            return final_clip
+
+        try:
+            bgm_clip = AudioFileClip(bgm_file)
+            bgm_duration = max(0, final_clip.duration - bgm_start_time)
+
+            logger.info(f"🎶 BGM Logic: File={bgm_file}")
+            logger.info(
+                f"   Start Time={bgm_start_time:.2f}s, Final Duration={final_clip.duration:.2f}s, BGM Duration={bgm_duration:.2f}s"
+            )
+
+            if bgm_duration > 0:
+                bgm_clip = afx.audio_loop(bgm_clip, duration=bgm_duration)
+                bgm_clip = (
+                    bgm_clip.fx(afx.audio_fadeout, 3.0)
+                    .volumex(0.15)
+                    .set_start(bgm_start_time)
+                )
+
+                original_audio = final_clip.audio
+                final_audio = (
+                    CompositeAudioClip([original_audio, bgm_clip])
+                    if original_audio
+                    else bgm_clip
+                )
+
+                final_clip = final_clip.set_audio(final_audio)
+                logger.info("   ✅ BGM mixed successfully.")
+            else:
+                logger.warning("   ⚠️ BGM duration <= 0, skipping mix.")
+
+        except Exception as e:
+            logger.error(f"Failed to mix BGM: {e}")
+
+        return final_clip
+
+    def _resolve_bgm_file(self, category: str):
+        """解析背景音乐文件路径"""
+        if not category or category not in C.CATEGORY_BGM:
+            return None
+
+        bgm_filename = C.CATEGORY_BGM[category]
+        base_dir = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        potential_path = os.path.join(base_dir, "assets", "music", bgm_filename)
+
+        return potential_path if os.path.exists(potential_path) else None
+
     def assemble_video(
         self,
         scenes: List[Scene],
@@ -790,12 +1190,31 @@ class VideoAssemblerBase(ABC):
         category: str = "",
         intro_hook: str = "",
     ):
-        logger.info("Assembling video clips...")
-        clips = []
-        bgm_start_time = 0.0
+        """
+        组装最终视频
 
-        # --- 镜头动作映射 (Camera Action Mapping) ---
-        # 将通用术语映射到我们实现的具体动作
+        流程：
+        1. 配置转场
+        2. 生成封面
+        3. 处理场景 clips
+        4. 添加片尾
+        5. 拼接主视频
+        6. 添加片头
+        7. 混合 BGM
+        8. 输出视频文件
+        """
+        logger.info("Assembling video clips...")
+
+        # 1. 设置转场配置
+        trans_type, trans_duration, padding = self._setup_transition_config(category)
+
+        # 2. 生成封面
+        clips = []
+        cover_clip = self._generate_cover_clip(scenes, topic, subtitle)
+        if cover_clip:
+            clips.append(cover_clip)
+
+        # 3. 处理所有场景
         action_map = {
             "static": "static",
             "zoom_in": "zoom_in",
@@ -804,506 +1223,35 @@ class VideoAssemblerBase(ABC):
             "pan_right": "pan_right",
             "pan_up": "pan_up",
             "pan_down": "pan_down",
-            "follow": "pan_right",  # follow 默认向右平移
+            "follow": "pan_right",
             "track": "pan_left",
         }
 
-        # --- 转场逻辑准备 (Transition Logic Prep) ---
-        trans_type = "none"
-        trans_duration = 0.0
-        padding = 0.0
-
-        if (
-            category
-            and hasattr(C, "CATEGORY_TRANSITIONS")
-            and category in C.CATEGORY_TRANSITIONS
-        ):
-            trans_type = C.CATEGORY_TRANSITIONS[category]
-
-        # --- 确定时长和填充策略 (Determine duration and padding strategy) ---
-        if trans_type == "crossfade":
-            trans_duration = 0.8
-            padding = -0.8
-        elif trans_type == "crossfade_slow":
-            trans_duration = 1.5
-            padding = -1.5
-        elif trans_type == "circle_open":
-            trans_duration = 1.2
-            padding = -1.0  # 重叠时间稍小于总时长? 为了安全我们部分重叠
-        elif trans_type == "page_turn":
-            trans_duration = 0.8
-            padding = 0.0  # 插入模式 (Insert mode)
-
-        # ... 封面创建逻辑 ...
-        cover_path = os.path.join(C.OUTPUT_DIR, "cover.png")
-        if not os.path.exists(cover_path):
-            logger.info("Generating Video Cover in Assembly Phase...")
-            # Use first scene image as base if available
-            base_image = None
-            for s in scenes:
-                if s.image_path and os.path.exists(s.image_path):
-                    base_image = s.image_path
-                    break
-
-            if base_image:
-                self.generate_cover(
-                    image_path=base_image,
-                    title=topic if topic else "Untitled",
-                    output_path=cover_path,
-                    subtitle=subtitle,
-                )
-            else:
-                logger.warning("No scene image available for cover generation.")
-
-        # Add cover to clips if it exists
-        if os.path.exists(cover_path):
-            try:
-                # Standard cover duration 2.5s
-                cover_clip = ImageClip(cover_path).set_duration(2.5)
-                cover_clip = cover_clip.fadein(0.5).fadeout(0.5)
-                clips.append(cover_clip)
-            except Exception as e:
-                logger.error(f"Failed to load cover image: {e}")
-
-        # ... (循环处理) ...
-        prev_scene_node = None  # 用于翻书效果的追踪
-
-        for i, scene in enumerate(scenes):
-            if not scene.audio_path:
-                continue
-            try:
-                # 解析运镜动作 (Resolve Camera Action)
-                raw_action = getattr(scene, "camera_action", "zoom_in")
-                scene.camera_action = action_map.get(
-                    raw_action, "zoom_in"
-                )  # 原地更新以便 _load_visual 使用
-
-                audio_clip = AudioFileClip(scene.audio_path)
-                audio_clip = audio_clip.fx(afx.audio_fadeout, 0.05)
-
-                audio_padding = 0.5
-                duration = audio_clip.duration + audio_padding
-
-                # 调整重叠类型的时长 (Adjust duration for OVERLAP types)
-                if padding < 0:
-                    # 如果重叠，我们需要额外的视觉时长来覆盖重叠部分
-                    pass
-
-                if padding < 0 and i > 0:
-                    # 增加视觉时长以适应淡入/重叠时间
-                    duration += abs(padding)
-
-                visual_clip = self._load_visual(scene, duration)
-                if visual_clip:
-                    # 重叠时的音频处理 (Audio Handling for Overlap)
-                    # 如果视频重叠，音频也会重叠。
-                    # 我们希望旁白不重叠。
-                    # 所以必须确保每段音频在结尾有 abs(padding) 的静音?
-                    pass
-
-                    final_audio_duration = duration
-                    # 使用原始代码逻辑:
-                    padded_audio = CompositeAudioClip(
-                        [audio_clip.set_start(0)]
-                    ).set_duration(duration)
-                    visual_clip = visual_clip.set_audio(padded_audio)
-
-                    visual_clip = self._compose_scene(scene, visual_clip, duration)
-
-                    # --- 插入转场 (翻书) | INSERT TRANSITION (Page Turn) ---
-                    if trans_type == "page_turn" and prev_scene_node:
-                        # 创建前一个场景和当前场景之间的转场
-                        # 我们需要图像
-                        prev_img = prev_scene_node.image_path
-                        curr_img = scene.image_path
-                        if prev_img and curr_img:
-                            trans_clip = self.create_page_flip_transition(
-                                prev_img, curr_img, duration=trans_duration
-                            )
-                            if trans_clip:
-                                # 转场音频？静音。
-                                clips.append(trans_clip)
-
-                    # --- 重叠转场效果 (OVERLAP TRANSITION EFFECTS) ---
-                    if padding < 0 and i > 0:
-                        if trans_type == "circle_open":
-                            visual_clip = self.apply_circle_open(
-                                visual_clip, abs(padding)
-                            )
-                        elif trans_type.startswith("crossfade"):
-                            visual_clip = visual_clip.crossfadein(abs(padding))
-
-                    clips.append(visual_clip)
-                    prev_scene_node = scene  # 更新追踪器
-
-            except Exception as e:
-                logger.error(f"Error processing scene {scene.scene_id}: {e}")
+        scene_clips = self._process_scenes(
+            scenes, action_map, trans_type, trans_duration, padding
+        )
+        clips.extend(scene_clips)
 
         if not clips:
-            return
+            logger.error("No clips generated. Aborting video assembly.")
+            return None
 
-        # ... Brand Outro ...
-        if C.ENABLE_BRAND_OUTRO:
-            try:
-                outro_clip = self.create_brand_outro(duration=4.0)
-                if outro_clip:
-                    clips.append(outro_clip)
-                    logger.info("✅ 品牌片尾已添加")
-                else:
-                    logger.warning("⚠️ 品牌片尾生成失败")
-            except Exception as e:
-                logger.error(f"Failed to create brand outro: {e}")
+        # 4. 添加品牌片尾
+        self._add_brand_outro(clips)
 
-        # Concatenate logic
-        # If Page Turn (padding=0), we just concat. transition clips are in list.
-        # If Crossfade (padding<0), we concat with overlap.
-
+        # 5. 合并场景 clips 为主视频
         main_clip = concatenate_videoclips(clips, method="compose", padding=padding)
-        final_clip = main_clip
 
-        # Custom Intro Logic
-        if hasattr(C, "ENABLE_CUSTOM_INTRO") and C.ENABLE_CUSTOM_INTRO:
-            # 1. 尝试从分类配置中获取专属片头
-            intro_path = None
-            if (
-                category
-                and hasattr(C, "CATEGORY_INTROS")
-                and category in C.CATEGORY_INTROS
-            ):
-                intro_path = C.CATEGORY_INTROS[category]
+        # 6. 添加片头视频
+        bgm_start_time = 0.0
+        final_clip, bgm_start_time = self._add_custom_intro(
+            main_clip, intro_hook, bgm_start_time
+        )
 
-            # 2. 如果没有分类片头，使用默认通用配置
-            if not intro_path:
-                generic_intro = getattr(C, "CUSTOM_INTRO_VIDEO_PATH", "")
-                if generic_intro:
-                    if isinstance(generic_intro, list):
-                        import random
+        # 7. 混合背景音乐
+        final_clip = self._mix_background_music(final_clip, category, bgm_start_time)
 
-                        intro_path = random.choice(generic_intro)
-                    else:
-                        intro_path = str(generic_intro)
-                else:
-                    intro_path = ""
-
-            if intro_path and not os.path.isabs(intro_path):
-                # Resolve relative path from project root
-                base_dir = os.path.dirname(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                )
-                intro_path = os.path.join(base_dir, intro_path)
-
-            if intro_path and os.path.exists(intro_path):
-                try:
-                    logger.info(f"Adding custom intro video from {intro_path}")
-                    intro_clip = VideoFileClip(intro_path)
-
-                    # --- 片头配音 (Dubbing) 逻辑 ---
-                    enable_dub = getattr(C, "ENABLE_CUSTOM_INTRO_DUB", False)
-
-                    # Resolve dub text priorities
-                    # 1. AI Hook (Highest)
-                    dub_text = ""
-
-                    if enable_dub:
-                        dub_text = intro_hook
-                        logger.info(f"🧠 Using AI Generated Intro Hook: {dub_text}")
-
-                    if enable_dub and dub_text:
-                        logger.info(f"🎤 Generating Intro Dub: {dub_text[:15]}...")
-                        # 定义输出路径
-                        dub_audio_path = os.path.join(
-                            C.OUTPUT_DIR, "intro_hook_dub.mp3"
-                        )
-
-                        # 检查是否应该使用自定义配音配置
-                        # Check if we should use custom dub config
-                        use_custom_dub_settings = getattr(
-                            C, "ENABLE_CUSTOM_INTRO_DUB", False
-                        )
-                        if use_custom_dub_settings:
-                            logger.info("🎤 Using Custom Intro Dub Settings")
-
-                            # 尝试使用自定义设置生成
-                            # Try generate with custom settings
-                            # 需要一个支持 pitch/rate 的生成函数，或者在生成后处理
-                            # 目前 _generate_intro_dub_sync 内部使用的是 C.TTS_VOICE
-                            # 我们需要传递参数给它，或者在此处临时修改
-
-                            # original_voice = C.TTS_VOICE
-                            # 临时覆盖 (Temp override) - Not thread safe but okay for script
-                            # Better: Pass arguments to generate function.
-                            # But _generate_intro_dub_sync calls self.audio_studio.generate_speech
-
-                            # 让我们简单地传递参数给 _generate_intro_dub_sync
-                            # Let's modify _generate_intro_dub_sync signature or logic below
-                            pass
-
-                        if self._generate_intro_dub_sync(
-                            text=dub_text,
-                            output_path=dub_audio_path,
-                            voice=getattr(C, "CUSTOM_INTRO_DUB_VOICE", None)
-                            if use_custom_dub_settings
-                            else None,
-                            rate=getattr(C, "CUSTOM_INTRO_DUB_RATE", None)
-                            if use_custom_dub_settings
-                            else None,
-                            pitch=getattr(C, "CUSTOM_INTRO_DUB_PITCH", None)
-                            if use_custom_dub_settings
-                            else None,
-                            style=getattr(C, "CUSTOM_INTRO_DUB_STYLE", None)
-                            if use_custom_dub_settings
-                            else None,
-                        ):
-                            if os.path.exists(dub_audio_path):
-                                new_audio = AudioFileClip(dub_audio_path)
-                                # 静音原视频并替换音轨
-                                intro_clip = intro_clip.without_audio().set_audio(
-                                    new_audio
-                                )
-                                # Check duration: If audio > video, try to speed up audio precisely
-                                if new_audio.duration > intro_clip.duration:
-                                    logger.info(
-                                        f"⚠️ Intro Audio ({new_audio.duration:.2f}s) > Video ({intro_clip.duration:.2f}s). Regenerating with faster rate..."
-                                    )
-
-                                    # Calculate needed speedup
-                                    # We need duration <= intro_clip.duration
-                                    # current_rate ~ 1.0 (relative to base)
-                                    # target_duration = intro_clip.duration
-                                    # speed_factor = new_audio.duration / intro_clip.duration
-                                    # We need to increase rate by this factor.
-                                    # edge-tts rate format is "+X%"
-
-                                    ratio = new_audio.duration / intro_clip.duration
-                                    # Add a small buffer (5%) to ensure it fits
-                                    needed_increase = (ratio - 1.0) * 1.05
-                                    if needed_increase > 0.5:
-                                        logger.warning(
-                                            f"⚠️ Audio requires >50% speedup ({needed_increase:.0%}). Result might sound rushed."
-                                        )
-
-                                    current_rate_str = getattr(
-                                        C, "CUSTOM_INTRO_DUB_RATE", "+0%"
-                                    )
-                                    # Parse current rate
-                                    # Assuming format "+X%" or "-X%"
-                                    try:
-                                        base_rate_val = int(current_rate_str.strip("%"))
-                                    except:
-                                        base_rate_val = 0
-
-                                    # New rate % = (1 + base/100) * (1 + needed_increase) - 1  ... roughly?
-                                    # No, rate in edge-tts is speed increase. +10% means 1.1x speed.
-                                    # We need speed = current_speed * ratio
-                                    # speed_new = (1 + base/100) * ratio
-                                    # percent_new = (speed_new - 1) * 100
-
-                                    current_speed = 1.0 + (base_rate_val / 100.0)
-                                    target_speed = (
-                                        current_speed * ratio * 1.05
-                                    )  # 5% buffer
-                                    new_rate_val = int((target_speed - 1.0) * 100)
-                                    new_rate_str = f"{new_rate_val:+d}%"
-
-                                    logger.info(
-                                        f"🔄 Regenerating Intro Dub with rate: {current_rate_str} -> {new_rate_str}"
-                                    )
-
-                                    # Close previous propery to release file
-                                    new_audio.close()
-                                    del new_audio
-
-                                    # Regenerate
-                                    if self._generate_intro_dub_sync(
-                                        text=dub_text,
-                                        output_path=dub_audio_path,
-                                        voice=getattr(C, "CUSTOM_INTRO_DUB_VOICE", None)
-                                        if use_custom_dub_settings
-                                        else None,
-                                        rate=new_rate_str,  # Use calculated rate
-                                        pitch=getattr(C, "CUSTOM_INTRO_DUB_PITCH", None)
-                                        if use_custom_dub_settings
-                                        else None,
-                                        style=getattr(C, "CUSTOM_INTRO_DUB_STYLE", None)
-                                        if use_custom_dub_settings
-                                        else None,
-                                    ):
-                                        if os.path.exists(dub_audio_path):
-                                            new_audio = AudioFileClip(dub_audio_path)
-                                            # Final check logic? If still long, we might just clip or extend.
-                                            # But usually edge-tts is accurate enough with rate.
-
-                                            # If still slightly long (e.g. metadata diff), clip it?
-                                            if new_audio.duration > intro_clip.duration:
-                                                logger.warning(
-                                                    "⚠️ Audio still slightly longer after speedup. Trimming end."
-                                                )
-                                                new_audio = new_audio.subclip(
-                                                    0, intro_clip.duration
-                                                )
-
-                                            intro_clip = (
-                                                intro_clip.without_audio().set_audio(
-                                                    new_audio
-                                                )
-                                            )
-                                    else:
-                                        logger.error(
-                                            "Failed to regenerate faster audio. Keeping original."
-                                        )
-                                        intro_clip = (
-                                            intro_clip.without_audio().set_audio(
-                                                AudioFileClip(dub_audio_path)
-                                            )
-                                        )
-
-                                else:
-                                    # Duration OK, just apply
-                                    intro_clip = intro_clip.without_audio().set_audio(
-                                        new_audio
-                                    )
-
-                                # No longer extending video here. Strict audio limit per user request.
-                    # --- 配音逻辑结束 ---
-
-                    # Resize intro if needed to match main clip?
-                    # Generally better to let composite handle it or resize intro to config.VIDEO_SIZE
-                    if hasattr(C, "VIDEO_SIZE"):
-                        target_w, target_h = C.VIDEO_SIZE
-                        w, h = intro_clip.size
-
-                        # Aspect Fill (Resize then Crop)
-                        if w != target_w or h != target_h:
-                            ratio_w = target_w / w
-                            ratio_h = target_h / h
-                            scale = max(ratio_w, ratio_h)
-
-                            # Calculate new dimensions after scaling
-                            new_w = int(w * scale)
-                            new_h = int(h * scale)
-
-                            logger.info(
-                                f"🎬 片头视频缩放: {w}x{h} -> {new_w}x{new_h} (scale={scale:.3f})"
-                            )
-
-                            if scale != 1.0:
-                                intro_clip = intro_clip.resize(newsize=(new_w, new_h))
-
-                            # Center Crop to exact target size
-                            if new_w != target_w or new_h != target_h:
-                                intro_clip = intro_clip.crop(
-                                    x_center=new_w / 2,
-                                    y_center=new_h / 2,
-                                    width=target_w,
-                                    height=target_h,
-                                )
-                    else:
-                        print("DEBUG: C.VIDEO_SIZE NOT FOUND!")
-
-                    intro_trans = getattr(C, "CUSTOM_INTRO_TRANSITION", "crossfade")
-                    intro_trans_dur = abs(
-                        float(getattr(C, "CUSTOM_INTRO_TRANSITION_DURATION", 0.8))
-                    )
-
-                    intro_padding = 0
-                    if intro_trans == "crossfade" and intro_trans_dur > 0:
-                        # 1. 延长片头：使用定格帧
-                        # 截取最后一帧（安全距离：结束前 0.1 秒）
-                        last_frame_t = max(0, intro_clip.duration - 0.1)
-                        last_frame_img = intro_clip.get_frame(last_frame_t)
-                        freeze_clip = ImageClip(last_frame_img).set_duration(
-                            intro_trans_dur
-                        )
-                        # 确保属性匹配（虽然 get_frame 获取了内容，ImageClip 进一步封装）
-                        # 虽然 ImageClip 从数组创建很稳健，但保持属性匹配是好习惯。
-
-                        # 合并：原始片头 + 定格帧
-                        intro_extended = concatenate_videoclips(
-                            [intro_clip, freeze_clip]
-                        )
-
-                        # 2. 正片淡入 (Fade In)
-                        main_clip = main_clip.crossfadein(intro_trans_dur)
-
-                        # 3. 将定格部分与正片重叠
-                        intro_padding = -intro_trans_dur
-
-                        # 使用延长后的片头进行合并
-                        final_clip = concatenate_videoclips(
-                            [intro_extended, main_clip],
-                            method="compose",
-                            padding=intro_padding,
-                        )
-                    else:
-                        # 普通硬切或其他逻辑（无转场）
-                        final_clip = concatenate_videoclips(
-                            [intro_clip, main_clip], method="compose", padding=0
-                        )
-
-                    # 调整背景音乐起始时间：
-                    # 时间轴: [片头视频] ([定格/重叠部分]) [正片...]
-                    # 我们希望 BGM 在正片开始浮现时切入？
-                    # 还是在片头视频动作结束时切入？
-                    # 现在的逻辑是：片头视频播放完毕 -> 定格开始 -> BGM 开始。
-                    bgm_start_time += intro_clip.duration
-
-                except Exception as e:
-                    logger.error(f"Failed to add custom intro video: {e}")
-            else:
-                logger.warning(
-                    f"Custom intro enabled but file not found at {intro_path}"
-                )
-
-        bgm_file = None
-        if category and category in C.CATEGORY_BGM:
-            bgm_filename = C.CATEGORY_BGM[category]
-            # Assumes assets path relative to this file's parent's parent...
-            # Original: os.path.join(os.path.dirname(__file__), "assets", "music")
-            # Now we are in auto_maker/steps/video/base.py.
-            # auto_maker is ../../
-            # assets is ../../assets?
-            # Adjust path:
-            base_dir = os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            )
-            potential_path = os.path.join(base_dir, "assets", "music", bgm_filename)
-            if os.path.exists(potential_path):
-                bgm_file = potential_path
-            else:
-                logger.warning(f"BGM not found at {potential_path}")
-
-        if bgm_file:
-            try:
-                bgm_clip = AudioFileClip(bgm_file)
-                bgm_duration = max(0, final_clip.duration - bgm_start_time)
-
-                logger.info(f"🎶 BGM Logic: File={bgm_file}")
-                logger.info(f"   Start Time={bgm_start_time:.2f}s")
-                logger.info(f"   Final Clip Duration={final_clip.duration:.2f}s")
-                logger.info(f"   Calculated BGM Duration={bgm_duration:.2f}s")
-
-                if bgm_duration > 0:
-                    bgm_clip = afx.audio_loop(bgm_clip, duration=bgm_duration)
-                    # Add fade out to BGM to avoid abrupt cut at end of video/outro
-                    bgm_clip = bgm_clip.fx(afx.audio_fadeout, 3.0)
-                    bgm_clip = bgm_clip.volumex(0.15)
-                    bgm_clip = bgm_clip.set_start(bgm_start_time)
-
-                    # Mix BGM with existing audio
-                    # Ensure final_clip has audio (it should from scenes/intro)
-                    original_audio = final_clip.audio
-                    if original_audio:
-                        final_audio = CompositeAudioClip([original_audio, bgm_clip])
-                    else:
-                        final_audio = bgm_clip
-
-                    final_clip = final_clip.set_audio(final_audio)
-                    logger.info("   ✅ BGM mixed successfully.")
-                else:
-                    logger.warning("   ⚠️ BGM duration <= 0, skipping mix.")
-            except Exception as e:
-                logger.error(f"Failed to mix BGM: {e}")
-
+        # 8. 输出视频文件
         output_path = os.path.join(C.OUTPUT_DIR, output_filename)
         final_clip.write_videofile(
             output_path, fps=24, codec="libx264", audio_codec="aac"

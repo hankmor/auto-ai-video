@@ -115,17 +115,17 @@ async def main():
     C.BILINGUAL_CN_VOICE = "zh-CN-YunxiaNeural"
     
     # ==================== 创建场景 ====================
-    print("\n� 创建测试场景...")
+    print("\n🎬 创建测试场景...")
     
     # 使用项目的 AudioStudio
     audio_studio = GenericAudioStudio()
     
     scenes = []
     camera_actions = ["zoom_in", "pan_left", "zoom_out"]
+
+    # 🔥 只测试1个场景以加快速度
     narrations = [
         ("I have a toy car! It's red and shiny.", "我有一辆玩具汽车！它又红又亮。"),
-        ("I play with my car every day.", "我每天都玩我的汽车。"),
-        ("My car can go very fast. Vroom vroom!", "我的汽车跑得很快。嘟嘟嘟！"),
     ]
     
     for i, (narration_en, narration_cn) in enumerate(narrations):
@@ -140,26 +140,29 @@ async def main():
         )
         scenes.append(scene)
         print(f"   📍 场景 {i + 1}: {narration_en[:30]}... ({scene.camera_action})")
-    
+
     # ==================== 生成双语音频 ====================
     print("\n🎤 生成双语音频（英文 + 中文）...")
     await audio_studio.generate_audio(scenes, force=True)
-    
+
     # 验证音频生成
     for scene in scenes:
         if not scene.audio_path or not os.path.exists(scene.audio_path):
             print(f"   ❌ 场景 {scene.scene_id} 音频生成失败")
             return
         print(f"   ✅ 场景 {scene.scene_id} 音频: {scene.audio_path}")
-    
+
     # ==================== 组装视频 ====================
     print("\n🎬 开始组装视频...")
     print(f"   片头: {'✅ 启用' if C.ENABLE_CUSTOM_INTRO else '❌ 禁用'}")
     print(f"   片尾: {'✅ 启用' if C.ENABLE_BRAND_OUTRO else '❌ 禁用'}")
     print(f"   双语: {'✅ 启用' if C.ENABLE_BILINGUAL_MODE else '❌ 禁用'}")
-    
-    # 使用 Book 类型组装器 (测试绘本布局)
-    assembler = VideoAssemblerFactory.get_assembler("book")
+
+    # 🔥 修复：使用实际的category，让Factory返回正确的assembler
+    # "英语绘本" 映射到 "book" layout，会返回 BookVideoAssembler
+    category = "英语绘本"
+    assembler = VideoAssemblerFactory.get_assembler(category)
+    print(f"   使用组装器: {assembler.__class__.__name__}")
     
     try:
         output_path = assembler.assemble_video(
@@ -167,7 +170,7 @@ async def main():
             output_filename="full_pipeline_test.mp4",
             topic="I have a toy car",
             subtitle="我有一辆玩具汽车",
-            category="英语绘本",
+            category=category,
             intro_hook="小朋友们大家好，今天我们来学习一个有趣的故事！",
         )
         
@@ -178,8 +181,8 @@ async def main():
             print("=" * 60)
             
             # 打开视频
-            print("\n🎬 正在打开视频...")
-            os.system(f'open "{output_path}"')
+            # print("\n🎬 正在打开视频...")
+            # os.system(f'open "{output_path}"')
         else:
             print("\n❌ 视频生成失败")
             
