@@ -200,7 +200,8 @@ class ScriptGeneratorBase(ABC):
         2. 每个场景只描述一个具体的动作或画面。
         3. 画面提示词必须用中文，且**强制复制**角色档案。
         4. **负面约束**: 动物角色添加“负面提示：人类身体...”。
-        
+        5. **【禁止】**: 画面描述中绝不允许出现任何文字、对白框、字幕描述（如“画面下方出现文字...”）。画面必须纯净。
+
         对于 "narration" (旁白):
         1. {language_instruction}
         2. {narration_length_instruction}
@@ -215,9 +216,11 @@ class ScriptGeneratorBase(ABC):
         请仅返回一个纯 JSON 对象:
         {{
             "summary": "一句话概括...",
+            {bilingual_title_field}
             "scenes": [
                 {{
                     "narration": "...",
+                    {bilingual_json_field}
                     "image_prompt": "{visual_style}, ...",
                     "emotion": "...",
                     "camera_action": "..."
@@ -332,6 +335,9 @@ class ScriptGeneratorBase(ABC):
                 ),
                 category_instruction=cat_inst,
                 subtitle_info=f"本章标题: {subtitle}" if subtitle else "",
+                bilingual_json_field=f'"narration_cn": "...",'
+                if C.ENABLE_BILINGUAL_MODE
+                else "",
             )
             + tipp
         )
@@ -376,6 +382,7 @@ class ScriptGeneratorBase(ABC):
                     Scene(
                         scene_id=i + 1,
                         narration=item["narration"],
+                        narration_cn=item.get("narration_cn"),
                         image_prompt=self._sanitize_text(item["image_prompt"]),
                         emotion=item.get("emotion", "serious"),
                         sfx=item.get("sfx"),
@@ -428,10 +435,15 @@ class ScriptGeneratorBase(ABC):
 
         summary = self._sanitize_text(summary)
 
+        intro_hook = data.get("intro_hook", "")
+        # Sanitize intro hook
+        intro_hook = self._sanitize_text(intro_hook)
+
         return VideoScript(
             topic=topic,
             scenes=scenes,
             visual_style=visual_style_prompt,
             character_profiles=character_profiles,
             summary=summary,
+            intro_hook=intro_hook,
         )

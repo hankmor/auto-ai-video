@@ -11,9 +11,11 @@ class Scene:
     image_path: Optional[str] = None
     audio_path: Optional[str] = None
     video_path: Optional[str] = None  # Path to generated video clip (I2V)
-    emotion: Optional[str] = None # Emotion tag for TTS (cheerful, sad, etc.)
-    sfx: Optional[str] = None # Sound effect keyword (e.g. "laugh", "rain")
-    camera_action: Optional[str] = None # Camera movement tag (e.g. "zoom_in", "pan_left")
+    emotion: Optional[str] = None  # Emotion tag for TTS (cheerful, sad, etc.)
+    sfx: Optional[str] = None  # Sound effect keyword (e.g. "laugh", "rain")
+    camera_action: Optional[str] = None
+    narration_cn: Optional[str] = None  # Chinese translation for bilingual mode
+
 
 @dataclass
 class VideoScript:
@@ -23,6 +25,7 @@ class VideoScript:
     character_profiles: str = ""
     summary: str = ""  # 一句话剧情摘要
     intro_hook: str = ""  # AI生成的片头引导语
+    title_cn: str = ""  # Translated Chinese Title for Bilingual Cover
 
     def to_json(self, path: str):
         with open(path, 'w', encoding='utf-8') as f:
@@ -33,10 +36,12 @@ class VideoScript:
                 "character_profiles": self.character_profiles,
                 "summary": self.summary,
                 "intro_hook": self.intro_hook,
+                "title_cn": self.title_cn,
                 "scenes": [
                     {
                         "scene_id": s.scene_id,
                         "narration": s.narration,
+                        "narration_cn": s.narration_cn,
                         "image_prompt": s.image_prompt,
                         "duration_seconds": s.duration_seconds,
                         "image_path": s.image_path,
@@ -75,18 +80,21 @@ class VideoScript:
         
         scenes = []
         for s in data.get("scenes", []):
-            scenes.append(Scene(
-                scene_id=s["scene_id"],
-                narration=s["narration"],
-                image_prompt=s["image_prompt"],
-                duration_seconds=s.get("duration_seconds", 0.0),
-                image_path=s.get("image_path"),
-                audio_path=s.get("audio_path"),
-                video_path=s.get("video_path"),
-                emotion=s.get("emotion"),
-                sfx=s.get("sfx"),
-                camera_action=s.get("camera_action")
-            ))
+            scenes.append(
+                Scene(
+                    scene_id=s["scene_id"],
+                    narration=s["narration"],
+                    narration_cn=s.get("narration_cn"),
+                    image_prompt=s["image_prompt"],
+                    duration_seconds=s.get("duration_seconds", 0.0),
+                    image_path=s.get("image_path"),
+                    audio_path=s.get("audio_path"),
+                    video_path=s.get("video_path"),
+                    emotion=s.get("emotion"),
+                    sfx=s.get("sfx"),
+                    camera_action=s.get("camera_action"),
+                )
+            )
             
         return cls(
             topic=data.get("topic", ""),
@@ -95,4 +103,5 @@ class VideoScript:
             character_profiles=data.get("character_profiles", ""),
             summary=data.get("summary", ""),
             intro_hook=data.get("intro_hook", ""),
+            title_cn=data.get("title_cn", ""),
         )

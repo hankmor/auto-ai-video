@@ -12,12 +12,43 @@ from steps.video.base import VideoAssemblerBase
 class BookVideoAssembler(VideoAssemblerBase):
     def _compose_scene(self, scene: Scene, visual_clip, duration: float):
         # Always use book layout clip
-        return self.create_book_layout_clip(visual_clip, scene.narration, duration, visual_clip.size)
+        narration_cn = getattr(scene, "narration_cn", "")
+        # Use C.VIDEO_SIZE for consistent video dimensions
+        video_size = C.VIDEO_SIZE if hasattr(C, "VIDEO_SIZE") else visual_clip.size
+        return self.create_book_layout_clip(
+            visual_clip,
+            scene.narration,
+            duration,
+            video_size,
+            subtitle_cn=narration_cn,
+        )
 
-    def create_book_layout_clip(self, visual_clip, text: str, duration: float, video_size: tuple):
+    def create_book_layout_clip(
+        self,
+        visual_clip,
+        text: str,
+        duration: float,
+        video_size: tuple,
+        subtitle_cn: str = "",
+    ):
         W, H = video_size
         bg_clip = ImageClip(np.full((H, W, 3), 0, dtype=np.uint8)).set_duration(duration)
-        v_clip_resized = visual_clip.resize(width=W).set_position(("center", "center"))
+
+        # Aspect-Fill: Scale to cover target, then center crop
+        src_w, src_h = visual_clip.size
+        scale_w = W / src_w
+        scale_h = H / src_h
+        scale = max(scale_w, scale_h)  # Use max to ensure full coverage
+
+        scaled_clip = visual_clip.resize(scale)
+        scaled_w, scaled_h = scaled_clip.size
+
+        # Center crop to target size
+        x_offset = (scaled_w - W) // 2
+        y_offset = (scaled_h - H) // 2
+        v_clip_resized = scaled_clip.crop(
+            x1=x_offset, y1=y_offset, x2=x_offset + W, y2=y_offset + H
+        ).set_position(("center", "center"))
 
         pane_height = int(H * 0.35)
         pane_bottom_margin = int(H * 0.15)
@@ -35,7 +66,134 @@ class BookVideoAssembler(VideoAssemblerBase):
 
         is_english = self._is_english_title(text)
 
-        if is_english:
+        if C.ENABLE_BILINGUAL_MODE and subtitle_cn:
+            # --- Bilingual Mode (English + Chinese Pinyin) ---
+
+            # 1. English (Top Half)
+            base_font_size = int(W * 0.05)
+            font_en = font_manager.get_font("english", base_font_size)
+
+            # Wrap English
+            words = text.split()
+            lines = []
+            current_line = []
+
+            def get_line_width(line_words, f):
+                return draw.textbbox((0, 0), " ".join(line_words), font=f)[2]
+
+            for word in words:
+                test_line = current_line + [word]
+                if get_line_width(test_line, font_en) <= text_area_w:
+                    current_line = test_line
+                else:
+                    if current_line:
+                        lines.append(" ".join(current_line))
+                    current_line = [word]
+            if current_line:
+                lines.append(" ".join(current_line))
+
+            # Draw English
+            line_height = int(base_font_size * 1.3)
+            current_y = text_start_y
+
+            for line in lines:
+                w_line = draw.textbbox((0, 0), line, font=font_en)[2]
+                x_line = text_start_x + (text_area_w - w_line) / 2
+                draw.text(
+                    (x_line, current_y), line, font=font_en, fill=(255, 255, 255, 255)
+                )
+                current_y += line_height
+
+            current_y += 20  # Gap
+
+            # 2. Chinese with Pinyin (Bottom Half)
+            # Use smaller font
+            fs_hanzi = int(base_font_size * 0.8)
+            fs_pinyin = int(fs_hanzi * 0.6)
+            font_hanzi = font_manager.get_font("chinese", fs_hanzi)
+            font_pinyin = font_manager.get_font("chinese", fs_pinyin)
+
+            pinyin_list = pypinyin.pinyin(subtitle_cn, style=pypinyin.Style.TONE)
+            char_data = []
+
+            # Calculate metrics
+            line_overflow = False
+            current_row_width = 0
+            rows = []
+            current_row = []
+
+            spacing = 4
+
+            for i, char in enumerate(subtitle_cn):
+                # Simple Pinyin Layout Logic (Multi-line support needed?)
+                # Bilingual subtitle usually short enough for 1-2 lines?
+                # Let's support wrapping.
+                pass
+
+                bbox_c = draw.textbbox((0, 0), char, font=font_hanzi)
+                w_char = bbox_c[2] - bbox_c[0]
+                h_char = bbox_c[3] - bbox_c[1]
+
+                p_str = pinyin_list[i][0] if i < len(pinyin_list) else ""
+                bbox_p = draw.textbbox((0, 0), p_str, font=font_pinyin)
+                w_pin = bbox_p[2] - bbox_p[0]
+                h_pin = bbox_p[3] - bbox_p[1]
+
+                cell_width = max(w_char, w_pin)
+
+                if current_row_width + cell_width > text_area_w:
+                    rows.append(current_row)
+                    current_row = []
+                    current_row_width = 0
+
+                current_row.append(
+                    {
+                        "char": char,
+                        "pinyin": p_str,
+                        "w_char": w_char,
+                        "h_char": h_char,
+                        "w_pin": w_pin,
+                        "h_pin": h_pin,
+                        "cell_width": cell_width,
+                    }
+                )
+                current_row_width += cell_width + spacing
+
+            if current_row:
+                rows.append(current_row)
+
+            # Render Chinese Rows
+            for row in rows:
+                # Center row
+                row_width = sum(d["cell_width"] + spacing for d in row) - spacing
+                start_x = text_start_x + (text_area_w - row_width) / 2
+
+                y_pinyin = current_y
+                y_hanzi = y_pinyin + fs_pinyin + 2
+
+                curr_x = start_x
+                for item in row:
+                    x_p = curr_x + (item["cell_width"] - item["w_pin"]) / 2
+                    draw.text(
+                        (x_p, y_pinyin),
+                        item["pinyin"],
+                        font=font_pinyin,
+                        fill=(200, 200, 200, 255),
+                    )
+
+                    x_c = curr_x + (item["cell_width"] - item["w_char"]) / 2
+                    draw.text(
+                        (x_c, y_hanzi),
+                        item["char"],
+                        font=font_hanzi,
+                        fill=(255, 230, 0, 255),
+                    )
+
+                    curr_x += item["cell_width"] + spacing
+
+                current_y += fs_hanzi + fs_pinyin + 10
+
+        elif is_english:
             base_font_size = int(W * 0.06)
             font = font_manager.get_font("english", base_font_size)
             words = text.split()

@@ -129,6 +129,18 @@ class Config:
     CUSTOM_INTRO_TRANSITION: str = "crossfade"
     CUSTOM_INTRO_TRANSITION_DURATION: float = 0.8
 
+    # Custom Intro Dub
+    ENABLE_CUSTOM_INTRO_DUB: bool = False
+    CUSTOM_INTRO_DUB_VOICE: str = "zh-CN-YunxiNeural"
+    CUSTOM_INTRO_DUB_STYLE: str = "cheerful"
+    CUSTOM_INTRO_DUB_PITCH: str = "+0Hz"
+    CUSTOM_INTRO_DUB_RATE: str = "+0%"
+
+    # Bilingual Mode
+    ENABLE_BILINGUAL_MODE: bool = False
+    BILINGUAL_AUDIO_PAUSE: float = 1.0
+    BILINGUAL_CN_VOICE: str = ""  # 双语模式中文朗读音色，为空则使用默认音色
+
     # 字体设置
     FONTS: dict = field(default_factory=dict)
 
@@ -216,6 +228,9 @@ class Config:
             self.CATEGORY_LAYOUTS = data["models"].get(
                 "category_layouts", {}
             )  # 加载布局
+            self.CATEGORY_TRANSITIONS = data["models"].get(
+                "category_transitions", {}
+            )  # 加载转场配置
             self.ANIMATOR_TYPE = data["models"].get("animator", self.ANIMATOR_TYPE)
             self.TTS_PROVIDER = data["models"].get("tts_provider", self.TTS_PROVIDER)
             self.AZURE_TTS_KEY = data["models"].get("azure_tts_key", self.AZURE_TTS_KEY)
@@ -311,6 +326,34 @@ class Config:
             )
             self.ENABLE_AI_INTRO_HOOK = data["features"].get(
                 "enable_ai_intro_hook", self.ENABLE_AI_INTRO_HOOK
+            )
+            # 自定义片头配音
+            self.ENABLE_CUSTOM_INTRO_DUB = data["features"].get(
+                "enable_custom_intro_dub", self.ENABLE_CUSTOM_INTRO_DUB
+            )
+            self.CUSTOM_INTRO_DUB_VOICE = data["features"].get(
+                "custom_intro_dub_voice", self.CUSTOM_INTRO_DUB_VOICE
+            )
+            self.CUSTOM_INTRO_DUB_STYLE = data["features"].get(
+                "custom_intro_dub_style", self.CUSTOM_INTRO_DUB_STYLE
+            )
+            self.CUSTOM_INTRO_DUB_PITCH = data["features"].get(
+                "custom_intro_dub_pitch", self.CUSTOM_INTRO_DUB_PITCH
+            )
+            self.CUSTOM_INTRO_DUB_RATE = data["features"].get(
+                "custom_intro_dub_rate", self.CUSTOM_INTRO_DUB_RATE
+            )
+            # 双语模式配置 (Bilingual Mode)
+            self.ENABLE_BILINGUAL_MODE = data["features"].get(
+                "enable_bilingual_mode", self.ENABLE_BILINGUAL_MODE
+            )
+            self.BILINGUAL_AUDIO_PAUSE = float(
+                data["features"].get(
+                    "bilingual_audio_pause", self.BILINGUAL_AUDIO_PAUSE
+                )
+            )
+            self.BILINGUAL_CN_VOICE = data["features"].get(
+                "bilingual_cn_voice", self.BILINGUAL_CN_VOICE
             )
 
     def get_speech_rate(self, category: str) -> str:

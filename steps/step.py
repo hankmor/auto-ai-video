@@ -173,7 +173,13 @@ async def run_step_video(topic: str, subtitle: str = ""):
     output_path = assembler.assemble_video(
         script.scenes,
         topic=topic,
-        subtitle=subtitle,
+        subtitle=script.title_cn
+        if (C.ENABLE_BILINGUAL_MODE and getattr(script, "title_cn", ""))
+        else (
+            subtitle
+            if subtitle
+            else (script.subtitle if hasattr(script, "subtitle") else "")
+        ),
         category=C.CURRENT_CATEGORY,
         intro_hook=script.intro_hook,
     )

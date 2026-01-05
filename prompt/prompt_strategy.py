@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from config.config import C
 
 class PromptStrategy(ABC):
     """
@@ -44,7 +45,16 @@ class MeditationStrategy(PromptStrategy):
 
 class EnglishStorybookStrategy(PromptStrategy):
     def get_language_instruction(self) -> str:
-        return "1. **必须严格使用纯正的英文 (English)** 撰写旁白。适合儿童阅读，词汇简单地道。"
+        base_inst = "1. **必须严格使用纯正的英文 (English)** 撰写旁白。适合儿童阅读，词汇简单地道。"
+        if C.ENABLE_BILINGUAL_MODE:
+            return (
+                base_inst
+                + "\n        2. **双语模式启用**：你必须同时提供中文翻译。\n"
+                + "           - 将英文旁白放入 JSON 的 `narration` 字段。\n"
+                + "           - 将中文翻译放入 JSON 的 `narration_cn` 字段（不要放入 `narration`）。\n"
+                + "           - **必须**在 JSON 根目录提供 `title_cn` 字段，填入标题的中文翻译。"
+            )
+        return base_inst
 
     def get_category_instruction(self) -> str:
         return """
