@@ -16,11 +16,9 @@ class BookVideoAssembler(VideoAssemblerBase):
         # Use C.VIDEO_SIZE for consistent video dimensions
         video_size = C.VIDEO_SIZE if hasattr(C, "VIDEO_SIZE") else visual_clip.size
 
+        narration_cn_str = str(narration_cn) if narration_cn is not None else "N/A"
         logger.info(
-            f"📖 BookVideoAssembler._compose_scene: 准备调用 create_book_layout_clip"
-        )
-        logger.info(
-            f"   video_size={video_size}, narration='{scene.narration[:30]}...', narration_cn='{narration_cn[:20]}...'"
+            f"   video_size={video_size}, narration='{scene.narration[:30]}...', narration_cn='{narration_cn_str[:20]}...'"
         )
 
         try:
@@ -34,10 +32,9 @@ class BookVideoAssembler(VideoAssemblerBase):
             logger.info(f"   ✅ create_book_layout_clip 调用成功")
             return result
         except Exception as e:
-            logger.error(f"   ❌ create_book_layout_clip 调用失败: {e}")
-            import traceback
-
-            traceback.print_exc()
+            logger.traceback_and_raise(
+                Exception(f"   ❌ create_book_layout_clip 调用失败: {e}")
+            )
             return visual_clip
 
     def create_book_layout_clip(
@@ -293,7 +290,7 @@ class BookVideoAssembler(VideoAssemblerBase):
                 font_hanzi = font_manager.get_font("chinese", font_size_hanzi)
                 font_pinyin = font_manager.get_font("chinese", font_size_pinyin)
             except Exception as e:
-                logger.error(f"Failed to load font: {e}")
+                logger.traceback_and_raise(Exception(f"Failed to load font: {e}"))
                 return visual_clip
             
             chars_per_line = int(text_area_w / font_size_hanzi)
@@ -312,7 +309,14 @@ class BookVideoAssembler(VideoAssemblerBase):
                 for i, char in enumerate(line):
                     bbox_c = draw.textbbox((0, 0), char, font=font_hanzi)
                     w_char = bbox_c[2] - bbox_c[0]
-                    p_str = pinyin_list[i][0] if i < len(pinyin_list) else ""
+                    p_str = ""
+                    if pinyin_list and i < len(pinyin_list) and pinyin_list[i]:
+                        # pinyin_list[i] returns a list of phonetic notations, e.g. [['hào']]
+                        # We take the first one.
+                        try:
+                            p_str = pinyin_list[i][0]
+                        except:
+                            pass
                     bbox_p = draw.textbbox((0, 0), p_str, font=font_pinyin)
                     w_pin = bbox_p[2] - bbox_p[0]
                     cell_width = max(w_char, w_pin)

@@ -66,7 +66,9 @@ class FontManager:
                 # logger.debug(f"Loaded font: {path} ({size}px)")
                 return font
             except Exception as e:
-                logger.warning(f"Failed to load font {path}: {e}")
+                logger.traceback_and_raise(
+                    Exception(f"Failed to load font {path}: {e}")
+                )
                 continue
         
         # 4. 回退到默认值

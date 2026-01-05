@@ -106,7 +106,7 @@ class VolcAudioStudio(AudioStudioBase):
                 return False
 
         except Exception as e:
-            logger.error(f"Volc TTS Exception: {e}")
+            logger.traceback_and_raise(Exception(f"Volc TTS Exception: {e}"))
             return False
 
     async def _generate_one_audio(self, scene: Scene, force: bool = False):
@@ -168,13 +168,14 @@ class VolcAudioStudio(AudioStudioBase):
             )
 
             if not success:
-                raise Exception("Volc TTS returned false")
+                logger.traceback_and_raise(Exception("Volc TTS returned false"))
 
             scene.audio_path = output_path
 
         except Exception as e:
-            logger.error(f"Failed to generate audio for Scene {scene.scene_id}: {e}")
-            raise e
+            logger.traceback_and_raise(
+                Exception(f"Failed to generate audio for Scene {scene.scene_id}: {e}")
+            )
 
     async def generate_audio(self, scenes: List[Scene], force: bool = False):
         logger.info(f"Starting Volcengine audio generation for {len(scenes)} scenes...")

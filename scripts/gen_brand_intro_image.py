@@ -26,7 +26,9 @@ def _rgb_tuple(rgb) -> tuple[int, int, int]:
     return int(r), int(g), int(b)
 
 
-def _mix(a: tuple[int, int, int], b: tuple[int, int, int], t: float) -> tuple[int, int, int]:
+def _mix(
+    a: tuple[int, int, int], b: tuple[int, int, int], t: float
+) -> tuple[int, int, int]:
     t = _clamp(t)
     return (
         int(a[0] + (b[0] - a[0]) * t),
@@ -35,7 +37,9 @@ def _mix(a: tuple[int, int, int], b: tuple[int, int, int], t: float) -> tuple[in
     )
 
 
-def _adjust_sv(rgb: tuple[int, int, int], s_mul: float = 1.0, v_mul: float = 1.0) -> tuple[int, int, int]:
+def _adjust_sv(
+    rgb: tuple[int, int, int], s_mul: float = 1.0, v_mul: float = 1.0
+) -> tuple[int, int, int]:
     r, g, b = [c / 255.0 for c in rgb]
     h, s, v = colorsys.rgb_to_hsv(r, g, b)
     s = _clamp(s * s_mul)
@@ -44,7 +48,12 @@ def _adjust_sv(rgb: tuple[int, int, int], s_mul: float = 1.0, v_mul: float = 1.0
     return int(rr * 255), int(gg * 255), int(bb * 255)
 
 
-def _linear_gradient(size: tuple[int, int], c1: tuple[int, int, int], c2: tuple[int, int, int], horizontal: bool = True) -> Image.Image:
+def _linear_gradient(
+    size: tuple[int, int],
+    c1: tuple[int, int, int],
+    c2: tuple[int, int, int],
+    horizontal: bool = True,
+) -> Image.Image:
     """生成简单线性渐变（RGB）。"""
     w, h = size
     img = Image.new("RGB", (w, h), c1)
@@ -62,7 +71,9 @@ def _linear_gradient(size: tuple[int, int], c1: tuple[int, int, int], c2: tuple[
     return img
 
 
-def _paste_with_rounded_mask(base: Image.Image, overlay: Image.Image, box: tuple[int, int, int, int], radius: int):
+def _paste_with_rounded_mask(
+    base: Image.Image, overlay: Image.Image, box: tuple[int, int, int, int], radius: int
+):
     """将 overlay 以圆角 mask 贴到 base 的 box 区域。"""
     x0, y0, x1, y1 = box
     ow, oh = x1 - x0, y1 - y0
@@ -72,7 +83,13 @@ def _paste_with_rounded_mask(base: Image.Image, overlay: Image.Image, box: tuple
     mdraw.rounded_rectangle((0, 0, ow, oh), radius=radius, fill=255)
     base.paste(overlay, (x0, y0), mask)
 
-def _alpha_glow(overlay_rgba: Image.Image, glow_color: tuple[int, int, int], blur: int = 18, strength: int = 180) -> Image.Image:
+
+def _alpha_glow(
+    overlay_rgba: Image.Image,
+    glow_color: tuple[int, int, int],
+    blur: int = 18,
+    strength: int = 180,
+) -> Image.Image:
     """
     根据 overlay 的 alpha 生成彩色发光层，用于“抖音风”霓虹描边/光晕。
     - glow_color: (r,g,b)
@@ -85,7 +102,9 @@ def _alpha_glow(overlay_rgba: Image.Image, glow_color: tuple[int, int, int], blu
     return glow.filter(ImageFilter.GaussianBlur(radius=blur))
 
 
-def _pick_accent_colors(img_rgba: Image.Image) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
+def _pick_accent_colors(
+    img_rgba: Image.Image,
+) -> tuple[tuple[int, int, int], tuple[int, int, int]]:
     """
     从 logo 图里挑两个“更适合做 UI 配色”的颜色：
     - accent：按钮/高亮用（更饱和）
@@ -156,7 +175,9 @@ def generate_brand_intro(
     douyin_pink = (255, 0, 80)
     btn_left = _mix(douyin_cyan, accent, 0.20)
     btn_right = _mix(douyin_pink, accent, 0.20)
-    slogan_color = _mix(_adjust_sv(accent, s_mul=0.55, v_mul=0.95), (255, 255, 255), 0.35)
+    slogan_color = _mix(
+        _adjust_sv(accent, s_mul=0.55, v_mul=0.95), (255, 255, 255), 0.35
+    )
     title_color = _mix(text_accent, (245, 245, 255), 0.15)
 
     # 背景：用 logo 放大做模糊底图，配合轻微渐变遮罩，保证文字可读
@@ -219,11 +240,26 @@ def generate_brand_intro(
     panel = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     panel_draw = ImageDraw.Draw(panel)
     # 抖音风信息卡：黑色半透明 + 霓虹双层描边
-    _rounded_rect(panel_draw, (panel_x0, panel_y0, panel_x1, panel_y1), radius=26, fill=(0, 0, 0, 150))
+    _rounded_rect(
+        panel_draw,
+        (panel_x0, panel_y0, panel_x1, panel_y1),
+        radius=26,
+        fill=(0, 0, 0, 150),
+    )
     border = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     bdraw = ImageDraw.Draw(border)
-    bdraw.rounded_rectangle((panel_x0, panel_y0, panel_x1, panel_y1), radius=26, outline=(*btn_left, 200), width=4)
-    bdraw.rounded_rectangle((panel_x0 + 6, panel_y0 + 6, panel_x1 - 6, panel_y1 - 6), radius=22, outline=(*btn_right, 170), width=3)
+    bdraw.rounded_rectangle(
+        (panel_x0, panel_y0, panel_x1, panel_y1),
+        radius=26,
+        outline=(*btn_left, 200),
+        width=4,
+    )
+    bdraw.rounded_rectangle(
+        (panel_x0 + 6, panel_y0 + 6, panel_x1 - 6, panel_y1 - 6),
+        radius=22,
+        outline=(*btn_right, 170),
+        width=3,
+    )
 
     # 轻微阴影
     shadow = panel.filter(ImageFilter.GaussianBlur(radius=8))
@@ -255,9 +291,8 @@ def generate_brand_intro(
             canvas = Image.alpha_composite(canvas, layer)
             canvas.paste(mascot, (mx, my), mascot)
             draw = ImageDraw.Draw(canvas)
-        except Exception:
-            # 出错时不阻断主流程（例如找不到文件）
-            pass
+        except Exception as e:
+            logger.traceback_and_raise(Exception(f"Failed to load mascot image: {e}"))
 
     # 文案排版
     font_title = font_manager.get_font("chinese", 72)
@@ -275,7 +310,9 @@ def generate_brand_intro(
     # 账号
     bbox_h = draw.textbbox((0, 0), handle_text, font=font_small)
     handle_y = title_y + (bbox[3] - bbox[1]) + 18
-    draw.text((title_x, handle_y), handle_text, font=font_small, fill=(220, 220, 220, 235))
+    draw.text(
+        (title_x, handle_y), handle_text, font=font_small, fill=(220, 220, 220, 235)
+    )
 
     # slogan
     slogan_y = handle_y + (bbox_h[3] - bbox_h[1]) + 14
@@ -291,7 +328,9 @@ def generate_brand_intro(
 
     # CTA：霓虹渐变 + 发光（抖音风）
     btn = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    grad_btn = _linear_gradient((btn_w, btn_h), btn_left, btn_right, horizontal=True).convert("RGBA")
+    grad_btn = _linear_gradient(
+        (btn_w, btn_h), btn_left, btn_right, horizontal=True
+    ).convert("RGBA")
     _paste_with_rounded_mask(btn, grad_btn, (btn_x0, btn_y0, btn_x1, btn_y1), radius=32)
     glow = btn.filter(ImageFilter.GaussianBlur(radius=10))
     canvas = Image.alpha_composite(canvas, glow)
@@ -338,14 +377,24 @@ def generate_brand_intro(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="生成抖音风品牌片头图（可选叠加绘宝吉祥物）")
-    parser.add_argument("--logo", default="assets/image/logo.png", help="logo 路径（RGBA）")
-    parser.add_argument("--out", default="assets/image/brand_intro.png", help="输出图片路径")
+    parser = argparse.ArgumentParser(
+        description="生成抖音风品牌片头图（可选叠加绘宝吉祥物）"
+    )
+    parser.add_argument(
+        "--logo", default="assets/image/logo.png", help="logo 路径（RGBA）"
+    )
+    parser.add_argument(
+        "--out", default="assets/image/brand_intro.png", help="输出图片路径"
+    )
     parser.add_argument("--brand-name", default="智绘童梦", help="品牌名")
     parser.add_argument("--handle-text", default="抖音：@智绘童梦", help="账号文案")
-    parser.add_argument("--slogan", default="每天更新｜成语｜绘本｜英语 | 历史", help="slogan 文案")
+    parser.add_argument(
+        "--slogan", default="每天更新｜成语｜绘本｜英语 | 历史", help="slogan 文案"
+    )
     parser.add_argument("--cta", default="关注不迷路", help="按钮文案")
-    parser.add_argument("--mascot", default="", help="可选：绘宝透明 PNG 路径（为空则不叠加）")
+    parser.add_argument(
+        "--mascot", default="", help="可选：绘宝透明 PNG 路径（为空则不叠加）"
+    )
     args = parser.parse_args()
 
     generate_brand_intro(
@@ -357,4 +406,3 @@ if __name__ == "__main__":
         cta=args.cta,
         mascot_path=(args.mascot or None),
     )
-

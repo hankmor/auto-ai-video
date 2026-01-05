@@ -86,7 +86,7 @@ class ScriptGeneratorBase(ABC):
                 return {"scenes": valid_scenes}
             return None
         except Exception as e:
-            logger.error(f"JSON recovery failed: {e}")
+            logger.traceback_and_raise(Exception(f"JSON recovery failed: {e}"))
             return None
 
     def _detect_new_characters(
@@ -123,7 +123,9 @@ class ScriptGeneratorBase(ABC):
             new_chars = json.loads(response)
             return new_chars if isinstance(new_chars, dict) else {}
         except Exception as e:
-            logger.warning(f"Failed to detect new characters: {e}")
+            logger.traceback_and_raise(
+                Exception(f"Failed to detect new characters: {e}")
+            )
             return {}
 
     @abstractmethod
@@ -259,7 +261,9 @@ class ScriptGeneratorBase(ABC):
                 if "character_profiles" in existing_profile_data:
                     character_profiles = existing_profile_data["character_profiles"]
             except Exception as e:
-                logger.error(f"Failed to load series profile: {e}")
+                logger.traceback_and_raise(
+                    Exception(f"Failed to load series profile: {e}")
+                )
 
         if not (visual_style_prompt and character_profiles):
             logger.info("Phase 1: Designing Visual Style & Characters...")
@@ -295,7 +299,9 @@ class ScriptGeneratorBase(ABC):
                         json.dump(data_to_save, f, ensure_ascii=False, indent=2)
                     logger.info(f"💾 Saved new series profile to {series_profile_path}")
                 except Exception as e:
-                    logger.error(f"Failed to save series profile: {e}")
+                    logger.traceback_and_raise(
+                        Exception(f"Failed to save series profile: {e}")
+                    )
         else:
             logger.info("Skipping Phase 1 (Design) - Using Series Profile.")
 
@@ -431,7 +437,9 @@ class ScriptGeneratorBase(ABC):
                 else:
                     logger.info("No new characters detected.")
             except Exception as e:
-                logger.error(f"Failed to update series profile: {e}")
+                logger.traceback_and_raise(
+                    Exception(f"Failed to update series profile: {e}")
+                )
 
         summary = self._sanitize_text(summary)
 

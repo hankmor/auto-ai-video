@@ -50,7 +50,9 @@ class VideoAssemblerBase(ABC):
                     v_clip = vfx.loop(v_clip, duration=duration)
                 return v_clip.set_duration(duration)
             except Exception as e:
-                logger.error(f"Error loading video {scene.video_path}: {e}")
+                logger.traceback_and_raise(
+                    Exception(f"Error loading video {scene.video_path}: {e}")
+                )
 
         if scene.image_path and os.path.exists(scene.image_path):
             try:
@@ -93,7 +95,9 @@ class VideoAssemblerBase(ABC):
                     img_clip, duration=duration, action=action
                 )
             except Exception as e:
-                logger.error(f"Error loading image {scene.image_path}: {e}")
+                logger.traceback_and_raise(
+                    Exception(f"Error loading image {scene.image_path}: {e}")
+                )
                 return None
         return None
 
@@ -283,7 +287,9 @@ class VideoAssemblerBase(ABC):
 
             return VideoClip(make_frame=make_frame, duration=duration).set_fps(24)
         except Exception as e:
-            logger.warning(f"Failed to create page flip transition: {e}")
+            logger.traceback_and_raise(
+                Exception(f"Failed to create page flip transition: {e}")
+            )
             return None
 
     def apply_circle_open(self, clip: VideoClip, duration: float = 1.0) -> VideoClip:
@@ -421,7 +427,7 @@ class VideoAssemblerBase(ABC):
             outro_clip = outro_clip.fadein(0.5).fadeout(0.5)
             return outro_clip
         except Exception as e:
-            logger.error(f"Failed to create brand outro: {e}")
+            logger.traceback_and_raise(Exception(f"Failed to create brand outro: {e}"))
             return None
 
     def _is_english_title(self, title: str) -> bool:
@@ -545,7 +551,9 @@ class VideoAssemblerBase(ABC):
             img.save(output_path)
             return True
         except Exception as e:
-            logger.error(f"Failed to generate English cover: {e}")
+            logger.traceback_and_raise(
+                Exception(f"Failed to generate English cover: {e}")
+            )
             return False
 
     def _generate_intro_dub_sync(
@@ -558,60 +566,42 @@ class VideoAssemblerBase(ABC):
         style: Optional[str] = None,
     ) -> bool:
         """
-        Synchronously generate dubbing for the intro hook.
-        Uses AudioStudio.
-        Params allow overriding defaults (e.g. for Custom Intro Dub).
+        Synchronously generate dubbing via edge-tts python library.
+        Running in a separate thread to avoid conflicting with existing event loops.
         """
+        import threading
+
         try:
-            # Import here to avoid circular dependencies if any
-            from steps.audio.base import AudioStudioBase
-
-            # We assume self.audio_studio is available or we create a temporary one?
-            # VideoAssembler doesn't holding AudioStudio usually?
-            # Steps usually hold their own components.
-            # But assemble_video is in VideoAssembler.
-            # We might need to instantiate one or use edge-tts directly.
-
-            # Let's use simple edge-tts command directly for reliability and speed as fallback,
-            # OR use the factory if we want to support other providers.
-            # Since intro dub is usually Edge TTS, let's stick to Edge TTS logic
-            # to match `steps/audio/edge.py` logic but simplified.
-
-            # Actually, `run_step_video` doesn't pass AudioStudio.
-            # So we rely on CLI command or simple integration.
-
-            used_voice = voice if voice else C.TTS_VOICE
-            used_rate = rate if rate else "-10%"  # Default slighly slow for hook
+            # Use defaults from Config if not provided
+            used_voice = (
+                voice if voice else getattr(C, "TTS_VOICE", "zh-CN-YunxiaNeural")
+            )
+            used_rate = rate if rate else "-10%"
             used_pitch = pitch if pitch else "+0Hz"
 
-            # Construct Edge TTS Command
-            # edge-tts --text "..." --write-media "..." --voice "..." --rate "..." --pitch "..."
-            cmd = [
-                "edge-tts",
-                "--text",
-                text,
-                "--write-media",
-                output_path,
-                "--voice",
-                used_voice,
-                "--rate",
-                used_rate,
-                "--pitch",
-                used_pitch,
-            ]
+            def _run_in_thread():
+                async def _gen():
+                    communicate = edge_tts.Communicate(
+                        text, used_voice, rate=used_rate, pitch=used_pitch
+                    )
+                    await communicate.save(output_path)
 
-            logger.info(f"🎤 Executing Intro Dub: Voice={used_voice}, Rate={used_rate}")
+                # New loop for this thread
+                asyncio.run(_gen())
 
-            subprocess.run(
-                cmd,
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            # Start a new thread to run the async task
+            t = threading.Thread(target=_run_in_thread)
+            t.start()
+            t.join(timeout=30)  # Wait up to 30s
+
+            if t.is_alive():
+                logger.error("Intro Dub Generation Timed Out")
+                return False
+
             return True
 
         except Exception as e:
-            logger.error(f"Failed to generate intro dub: {e}")
+            logger.traceback_and_raise(Exception(f"Failed to generate intro dub: {e}"))
             return False
 
     def generate_cover(
@@ -727,7 +717,7 @@ class VideoAssemblerBase(ABC):
             img.save(output_path)
             return True
         except Exception as e:
-            logger.error(f"Failed to generate cover: {e}")
+            logger.traceback_and_raise(Exception(f"Failed to generate cover: {e}"))
             return False
 
     # ===================================================================
@@ -824,16 +814,24 @@ class VideoAssemblerBase(ABC):
                     ):
                         if os.path.exists(cover_audio_path):
                             audio_clip = AudioFileClip(cover_audio_path)
-                            cover_clip = cover_clip.set_audio(audio_clip)
+
                             # 确保封面时长至少为2.5秒，或音频时长+0.5秒缓冲
                             duration = max(2.5, audio_clip.duration + 0.5)
                             logger.info(
                                 f"   封面朗读时长: {audio_clip.duration:.2f}s -> 封面总时长: {duration:.2f}s"
                             )
 
+                            # Padding audio using CompositeAudioClip to avoid duration mismatch errors
+                            padded_audio = CompositeAudioClip(
+                                [audio_clip.set_start(0)]
+                            ).set_duration(duration)
+                            cover_clip = cover_clip.set_audio(padded_audio)
+
                 return cover_clip.set_duration(duration).fadein(0.5).fadeout(0.5)
             except Exception as e:
-                logger.error(f"Failed to load cover image: {e}")
+                logger.traceback_and_raise(
+                    Exception(f"Failed to load cover image: {e}")
+                )
         return None
 
     def _process_scenes(
@@ -863,9 +861,14 @@ class VideoAssemblerBase(ABC):
                     duration += abs(padding)
 
                 # 加载视觉
+                logger.info(f"   ➡️ Scene {i}: Loading visual from {scene.image_path}")
                 visual_clip = self._load_visual(scene, duration)
                 if not visual_clip:
+                    logger.warning(
+                        f"   ⚠️ Scene {i}: visual_clip is ALREADY None after _load_visual"
+                    )
                     continue
+                logger.info(f"   ✅ Scene {i}: Visual loaded: {visual_clip.size}")
 
                 # 设置音频
                 padded_audio = CompositeAudioClip(
@@ -874,8 +877,9 @@ class VideoAssemblerBase(ABC):
                 visual_clip = visual_clip.set_audio(padded_audio).set_duration(duration)
 
                 # 合成场景（添加字幕等）
+                narration_cn_log = getattr(scene, "narration_cn", "") or "N/A"
                 logger.info(
-                    f"🎨 正在合成场景 {scene.scene_id}，narration='{scene.narration[:30]}...', narration_cn='{getattr(scene, 'narration_cn', 'N/A')[:20]}...'"
+                    f"🎨 正在合成场景 {scene.scene_id}，narration='{scene.narration[:30]}...', narration_cn='{narration_cn_log[:20]}...'"
                 )
                 visual_clip = self._compose_scene(scene, visual_clip, duration)
                 logger.info(f"   ✅ 场景 {scene.scene_id} 合成完成")
@@ -899,7 +903,9 @@ class VideoAssemblerBase(ABC):
                 prev_scene_node = scene
 
             except Exception as e:
-                logger.error(f"Error processing scene {scene.scene_id}: {e}")
+                logger.traceback_and_raise(
+                    Exception(f"Error processing scene {scene.scene_id}: {e}")
+                )
 
         return clips
 
@@ -916,7 +922,7 @@ class VideoAssemblerBase(ABC):
             else:
                 logger.warning("⚠️ 品牌片尾生成失败")
         except Exception as e:
-            logger.error(f"Failed to create brand outro: {e}")
+            logger.traceback_and_raise(Exception(f"Failed to create brand outro: {e}"))
 
     def _add_custom_intro(self, main_clip, intro_hook: str, bgm_start_time: float):
         """添加自定义片头视频，返回 (final_clip, new_bgm_start_time)"""
@@ -947,7 +953,9 @@ class VideoAssemblerBase(ABC):
             return final_clip, bgm_start_time + bgm_offset
 
         except Exception as e:
-            logger.error(f"Failed to add custom intro video: {e}")
+            logger.traceback_and_raise(
+                Exception(f"Failed to add custom intro video: {e}")
+            )
             return main_clip, bgm_start_time
 
     def _resolve_intro_path(self):
@@ -1005,32 +1013,73 @@ class VideoAssemblerBase(ABC):
 
         new_audio = AudioFileClip(dub_audio_path)
 
-        # 如果音频过长，加速重新生成
+        # 如果音频过长，尝试适度加速重新生成 (Max +30%)
         if new_audio.duration > intro_clip.duration:
-            logger.info(
-                f"⚠️ Intro Audio ({new_audio.duration:.2f}s) > Video ({intro_clip.duration:.2f}s). Regenerating..."
-            )
-            new_audio = self._regenerate_faster_intro_dub(
-                new_audio, intro_clip, dub_audio_path, intro_hook
-            )
+            ratio = new_audio.duration / intro_clip.duration
+            if ratio > 1.3:
+                logger.info(
+                    f"⚠️ Audio is much longer ({ratio:.2f}x). Capping speedup to +30% and extending video."
+                )
+                # 只加速 30%
+                new_audio = self._regenerate_faster_intro_dub(
+                    new_audio,
+                    intro_clip,
+                    dub_audio_path,
+                    intro_hook,
+                    max_speed_increase=0.3,
+                )
+            else:
+                logger.info(
+                    f"⚠️ Intro Audio ({new_audio.duration:.2f}s) > Video ({intro_clip.duration:.2f}s). Regenerating to fit..."
+                )
+                new_audio = self._regenerate_faster_intro_dub(
+                    new_audio, intro_clip, dub_audio_path, intro_hook
+                )
 
         # 设置音频
         intro_clip = intro_clip.without_audio().set_audio(new_audio)
 
-        # 🔥 关键修复：裁剪视频匹配音频长度
+        # 再次检查：如果音频现在比视频短，裁剪视频
         if intro_clip.duration > new_audio.duration:
             logger.info(
                 f"✂️ 裁剪片头视频: {intro_clip.duration:.2f}s -> {new_audio.duration:.2f}s"
             )
             intro_clip = intro_clip.subclip(0, new_audio.duration)
 
+        # 如果音频依然比视频长 (说明加速后还是长，或者被 Cap 了)，则延长视频
+        elif new_audio.duration > intro_clip.duration:
+            diff = new_audio.duration - intro_clip.duration
+            logger.info(f"🐢 延长片头视频以匹配音频: +{diff:.2f}s")
+            # 使用最后一帧定格来填充剩余时间
+            last_frame = intro_clip.get_frame(intro_clip.duration - 0.05)
+            freeze_clip = (
+                ImageClip(last_frame).set_duration(diff).set_fps(intro_clip.fps)
+            )
+            intro_clip = concatenate_videoclips([intro_clip, freeze_clip])
+            intro_clip = intro_clip.set_audio(new_audio)
+
         return intro_clip
 
     def _regenerate_faster_intro_dub(
-        self, old_audio, intro_clip, dub_audio_path, intro_hook
+        self,
+        old_audio,
+        intro_clip,
+        dub_audio_path,
+        intro_hook,
+        max_speed_increase: float = 1.0,
     ):
-        """重新生成加速的片头配音"""
+        """重新生成加速的片头配音
+        max_speed_increase: 最大允许增加的倍速 (例如 0.3 表示最多加速 +30%)
+        """
         ratio = old_audio.duration / intro_clip.duration
+
+        # Apply strict capping
+        if ratio > (1.0 + max_speed_increase):
+            logger.info(
+                f"   ⚠️ Desired ratio {ratio:.2f}x exceeds limit +{max_speed_increase:.0%}. Capping."
+            )
+            ratio = 1.0 + max_speed_increase
+
         current_rate_str = getattr(C, "CUSTOM_INTRO_DUB_RATE", "+0%")
 
         try:
@@ -1164,7 +1213,7 @@ class VideoAssemblerBase(ABC):
                 logger.warning("   ⚠️ BGM duration <= 0, skipping mix.")
 
         except Exception as e:
-            logger.error(f"Failed to mix BGM: {e}")
+            logger.traceback_and_raise(Exception(f"Failed to mix BGM: {e}"))
 
         return final_clip
 

@@ -45,8 +45,8 @@ async def run_step_script(
             print("=" * 50 + "\n")
             return
         except Exception as e:
-            logger.warning(
-                f"Failed to load existing script, regenerating... Error: {e}"
+            logger.traceback_and_raise(
+                Exception(f"Failed to load existing script, regenerating... Error: {e}")
             )
 
     # script_gen = ScriptGenerator()
@@ -93,7 +93,7 @@ async def run_step_script(
         print("=" * 50 + "\n")
 
     except Exception as e:
-        logger.error(f"Script generation failed: {e}")
+        logger.traceback_and_raise(Exception(f"Script generation failed: {e}"))
 
 
 async def run_step_image(topic: str, force: bool = False):
@@ -205,7 +205,7 @@ async def run_step_video(topic: str, subtitle: str = ""):
             )
             logger.info(f"✅ Metadata generated: {C.OUTPUT_DIR}/metadata.md")
         except Exception as e:
-            logger.warning(f"Failed to generate metadata: {e}")
+            logger.traceback_and_raise(Exception(f"Failed to generate metadata: {e}"))
 
 
 async def run_all(

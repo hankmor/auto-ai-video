@@ -86,5 +86,5 @@ class StabilityAnimator(BaseAnimator):
             return ""
 
         except Exception as e:
-            logger.error(f"Stability 动画失败: {e}")
+            logger.traceback_and_raise(Exception(f"Stability 动画失败: {e}"))
             return ""

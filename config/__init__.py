@@ -28,7 +28,7 @@ def setup(
         final_category = C.CATEGORY_ALIASES[category]
         logger.info(f"🔄 Alias resolved: '{raw_cat}' -> '{final_category}')")
     else:
-        raise Exception("Invalid category: " + category)
+        logger.traceback_and_raise(Exception("Invalid category: " + category))
 
     # --- TTS 语音配置 ---
     # 优先级：--voice > category_voices（随机）> 配置默认值
@@ -61,7 +61,7 @@ def setup(
         .replace(" ", "_")
     )
     if not safe_topic:
-        raise Exception("Invalid topic: " + topic)
+        logger.traceback_and_raise(Exception("Invalid topic: " + topic))
 
     # 输出根目录：优先使用 config.yaml 的 project.output_dir（即 config.OUTPUT_DIR）
     base_output = C.OUTPUT_DIR or os.path.join(os.getcwd(), "output")

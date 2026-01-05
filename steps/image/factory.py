@@ -35,7 +35,9 @@ class ImageFactory:
             try:
                 self.client = OpenAIProvider(C).get_image_client()
             except Exception as e:
-                logger.error(f"Failed to init OpenAI Provider for Image: {e}")
+                logger.traceback_and_raise(
+                    Exception(f"Failed to init OpenAI Provider for Image: {e}")
+                )
 
         elif provider_key == "google" or (
             not provider_key and ("imagen" in model_name or "gemini" in model_name)
@@ -63,8 +65,9 @@ class ImageFactory:
                     )
 
             except Exception as e:
-                logger.error(f"Failed to initialize Volcengine Provider: {e}")
-                raise e
+                logger.traceback_and_raise(
+                    Exception(f"Failed to initialize Volcengine Provider: {e}")
+                )
 
     async def generate_images(self, scenes: List[Scene], force: bool = False):
         logger.info(
@@ -77,7 +80,7 @@ class ImageFactory:
             if img_path:
                 tasks.append(img_path)
             else:
-                raise Exception("Image generation failed")
+                logger.traceback_and_raise(Exception("Image generation failed"))
 
         results = await asyncio.gather(*tasks)
         return results
@@ -203,14 +206,17 @@ class ImageFactory:
                             raise Exception(f"VisualService Error: {resp}")
 
                     except Exception as e:
-                        logger.error(f"VisualService Request Failed: {e}")
-                        raise e
+                        logger.traceback_and_raise(
+                            Exception(f"VisualService Request Failed: {e}")
+                        )
 
             scene.image_path = image_path
             return image_path
 
         except Exception as e:
-            logger.error(f"Failed to generate image for Scene {scene.scene_id}: {e}")
+            logger.traceback_and_raise(
+                Exception(f"Failed to generate image for Scene {scene.scene_id}: {e}")
+            )
             return ""
 
     async def _download_image(self, url: str, path: str):

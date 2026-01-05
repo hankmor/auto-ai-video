@@ -66,7 +66,7 @@ class GenericAudioStudio(AudioStudioBase):
             await communicate.save(output_path)
             return True
         except Exception as e:
-            logger.error(f"TTS Generation failed: {e}")
+            logger.traceback_and_raise(Exception(f"TTS Generation failed: {e}"))
             return False
 
     async def _generate_one_audio(self, scene: Scene, force: bool = False):
@@ -141,7 +141,9 @@ class GenericAudioStudio(AudioStudioBase):
                 scene.audio_path = output_path
             
         except Exception as e:
-            logger.error(f"Failed to generate audio for Scene {scene.scene_id}: {e}")
+            logger.traceback_and_raise(
+                Exception(f"Failed to generate audio for Scene {scene.scene_id}: {e}")
+            )
 
     async def generate_audio(self, scenes: List[Scene], force: bool = False):
         logger.info(f"Starting audio generation for {len(scenes)} scenes...")

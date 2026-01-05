@@ -90,9 +90,5 @@ class LumaAnimator(BaseAnimator):
             return ""
 
         except Exception as e:
-            logger.error(f"Luma 动画错误: {e}")
-            if "url" in str(e).lower():
-                logger.error(
-                    "Luma API 可能需要公网 URL。直接使用本地文件路径不受支持。"
-                )
+            logger.traceback_and_raise(Exception(f"Luma 动画错误: {e}"))
             return ""

@@ -28,8 +28,9 @@ class LLMClient:
             try:
                 self.client = GoogleProvider(C).get_llm_client()
             except Exception as e:
-                logger.error(f"Failed to init Google Provider: {e}")
-                raise e
+                logger.traceback_and_raise(
+                    Exception(f"Failed to init Google Provider: {e}")
+                )
 
         # Volcengine (豆包)
         elif provider_key in ["doubao", "volcengine"] or (not provider_key and ("doubao" in model_name or "ep-" in model_name)):
@@ -38,8 +39,9 @@ class LLMClient:
             try:
                 self.client = VolcengineProvider(C).get_llm_client()
             except Exception as e:
-                logger.error(f"Failed to init Volcengine Provider: {e}")
-                raise e
+                logger.traceback_and_raise(
+                    Exception(f"Failed to init Volcengine Provider: {e}")
+                )
 
         else:
             # 如果显式设置或未找到其他匹配项，则默认为 OpenAI
@@ -48,8 +50,9 @@ class LLMClient:
             try:
                 self.client = OpenAIProvider(C).get_llm_client()
             except Exception as e:
-                logger.error(f"Failed to init OpenAI Provider: {e}")
-                self.client = None
+                logger.traceback_and_raise(
+                    Exception(f"Failed to init OpenAI Provider: {e}")
+                )
 
     def generate_text(self, prompt: str, system_prompt: str = "You are a helpful assistant.") -> str:
         if not self.client:
@@ -90,5 +93,6 @@ class LLMClient:
                 return response.choices[0].message.content
 
         except Exception as e:
-            logger.error(f"Error calling LLM ({self.provider}): {e}")
-            raise e
+            logger.traceback_and_raise(
+                Exception(f"Error calling LLM ({self.provider}): {e}")
+            )

@@ -15,16 +15,18 @@ class JimengAnimator(BaseAnimator):
             self.provider = VolcengineProvider(C)
             self.client = self.provider.get_image_client(service_type="visual")
         except Exception as e:
-            logger.error(f"初始化 JimengAnimator 失败: {e}")
+            logger.traceback_and_raise(Exception(f"初始化 JimengAnimator 失败: {e}"))
             self.client = None
 
     async def animate_scene(self, scene: Scene) -> str:
         if not scene.image_path:
-            logger.warning(f"场景 {scene.scene_id} 没有图片可供动画化。")
+            logger.traceback_and_raise(
+                Exception(f"场景 {scene.scene_id} 没有图片可供动画化。")
+            )
             return ""
 
         if not self.client:
-            logger.warning("Volcengine Visual Client 不可用。")
+            logger.traceback_and_raise(Exception("Volcengine Visual Client 不可用。"))
             return ""
 
         logger.info(f"正在使用即梦 (Volcengine) 动画化场景 {scene.scene_id}...")
@@ -34,7 +36,7 @@ class JimengAnimator(BaseAnimator):
             import base64
 
             if not os.path.exists(scene.image_path):
-                logger.error(f"找不到图片: {scene.image_path}")
+                logger.traceback_and_raise(Exception(f"找不到图片: {scene.image_path}"))
                 return ""
 
             with open(scene.image_path, "rb") as image_file:
@@ -86,11 +88,14 @@ class JimengAnimator(BaseAnimator):
                     "CVSync2AsyncSubmitTask", payload
                 )
             except Exception as e:
-                logger.error(f"提交任务失败: {e}")
                 if "50400" in str(e):
-                    logger.error(
-                        "权限拒绝: 请检查 AK/SK 是否有该服务的访问权限 (jimeng_i2v_first_v30)"
+                    logger.traceback_and_raise(
+                        Exception(
+                            "权限拒绝: 请检查 AK/SK 是否有该服务的访问权限 (jimeng_i2v_first_v30)"
+                        )
                     )
+                else:
+                    logger.traceback_and_raise(Exception(f"提交任务失败: {e}"))
                 return ""
 
             # 3. 解析 task_id 并轮询
@@ -101,11 +106,13 @@ class JimengAnimator(BaseAnimator):
                 if err_code == 10000:
                     task_id = resp.get("data", {}).get("task_id")
                 else:
-                    logger.error(f"提交失败，错误码 {err_code}: {resp.get('message')}")
+                    logger.traceback_and_raise(
+                        Exception(f"提交失败，错误码 {err_code}: {resp.get('message')}")
+                    )
                     return ""
 
             if not task_id:
-                logger.error(f"未收到有效 Task ID: {resp}")
+                logger.traceback_and_raise(Exception(f"未收到有效 Task ID: {resp}"))
                 return ""
 
             logger.info(f"任务已提交，Task ID: {task_id}。开始轮询...")
@@ -174,14 +181,14 @@ class JimengAnimator(BaseAnimator):
                         return ""
 
                 except Exception as e:
-                    logger.warning(f"轮询异常: {e}")
+                    logger.traceback_and_raise(Exception(f"轮询异常: {e}"))
 
                 await asyncio.sleep(5)
 
             logger.error("轮询超时。")
             return ""
         except Exception as e:
-            logger.error(f"Jimeng 动画错误: {e}")
+            logger.traceback_and_raise(Exception(f"Jimeng 动画错误: {e}"))
             return ""
 
     async def _save_video(self, url, scene):

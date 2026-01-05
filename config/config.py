@@ -163,8 +163,10 @@ class Config:
                 with open(self._yaml_path, "r", encoding="utf-8") as f:
                     self._yaml_data = yaml.safe_load(f) or {}
             except Exception as e:
-                logger.warning(f"读取配置文件失败：{self._yaml_path}，错误：{e}")
                 self._yaml_data = {}
+                logger.traceback_and_raise(
+                    Exception(f"读取配置文件失败：{self._yaml_path}，错误：{e}")
+                )
         else:
             self._yaml_data = {}
 

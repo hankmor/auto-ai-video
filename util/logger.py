@@ -13,3 +13,13 @@ def setup_logger():
     return logger
 
 logger = setup_logger()
+
+def traceback():
+    import traceback
+
+    logger.error(traceback.format_exc())
+
+
+def traceback_and_raise(e):
+    traceback()
+    raise e
