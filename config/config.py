@@ -123,6 +123,7 @@ class Config:
 
     # 自定义视频片头
     ENABLE_CUSTOM_INTRO: bool = False
+    ENABLE_AI_INTRO_HOOK: bool = True  # 启用 AI 生成的片头引导语
     CUSTOM_INTRO_VIDEO_PATH: Union[str, List[str]] = "assets/videos/intro.mp4"
     CATEGORY_INTROS: dict = field(default_factory=dict)
     CUSTOM_INTRO_TRANSITION: str = "crossfade"
@@ -307,6 +308,9 @@ class Config:
                     "custom_intro_transition_duration",
                     self.CUSTOM_INTRO_TRANSITION_DURATION,
                 )
+            )
+            self.ENABLE_AI_INTRO_HOOK = data["features"].get(
+                "enable_ai_intro_hook", self.ENABLE_AI_INTRO_HOOK
             )
 
     def get_speech_rate(self, category: str) -> str:

@@ -356,14 +356,6 @@ features:
   custom_intro_transition_duration: -1.5 # 转场持续时间
   # 自定义片头配音 (新功能)
   enable_custom_intro_dub: true # 开关：是否启用片头配音替换
-  # 配音文案映射 (根据随机选中的视频文件名自动匹配)
-  custom_intro_dub_text:
-    "1.mp4": "我是绘宝！准备好了吗？带上好奇心，我们一起出发去书里的神奇世界探险吧！"
-    "2.mp4": "变变变！绘宝要把书本变成魔法大屏幕啦，猜猜今天会跳出什么有趣的故事呢？"
-    "3.mp4": "嗨，我是你的好朋友绘宝！快坐好，最精彩的故事马上就要开始咯，我们一起看！"
-    "4.mp4": "小脑袋，大智慧！我是绘宝，快来跟我一起打开知识宝盒，去发现新奇的秘密吧！"
-    "5.mp4": "当当当！绘宝时间到！今天的精彩故事已经准备好了，千万别眨眼哦！"
-    "default": "哈喽小朋友们！欢迎来到智绘童梦！今天，我们要讲一个超级精彩的故事，你们准备好了吗？"
   custom_intro_dub_voice: "zh-CN-YunxiaNeural" # 配音音色
   custom_intro_dub_style: "excited" # 风格: cheerful, excited, friendly, Encourage, Angry, Fearful, sad
   custom_intro_dub_pitch: "+2Hz"

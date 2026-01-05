@@ -70,6 +70,7 @@ def main():
     # C.VIDEO_SIZE = (1080, 1920)  # Target 9:16 - Commented out to test config loading
     print(f"DEBUG: C.VIDEO_SIZE from config: {getattr(C, 'VIDEO_SIZE', 'NOT SET')}")
     C.ENABLE_CUSTOM_INTRO = True
+    C.ENABLE_CUSTOM_INTRO_DUB = True
     C.ENABLE_BRAND_OUTRO = True  # Enable Outro
 
     # 显式设置转场参数以方便观察
@@ -138,6 +139,7 @@ def main():
         output_filename="debug_intro_test.mp4",
         topic="Debug Intro",
         category="test",
+        intro_hook="This is a test AI intro hook generated for debugging purposes. It should be dubbed and the video should be extended.",
     )
 
     if output_path and os.path.exists(output_path):

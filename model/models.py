@@ -22,6 +22,7 @@ class VideoScript:
     visual_style: str = ""
     character_profiles: str = ""
     summary: str = ""  # 一句话剧情摘要
+    intro_hook: str = ""  # AI生成的片头引导语
 
     def to_json(self, path: str):
         with open(path, 'w', encoding='utf-8') as f:
@@ -31,6 +32,7 @@ class VideoScript:
                 "visual_style": self.visual_style,
                 "character_profiles": self.character_profiles,
                 "summary": self.summary,
+                "intro_hook": self.intro_hook,
                 "scenes": [
                     {
                         "scene_id": s.scene_id,
@@ -38,15 +40,14 @@ class VideoScript:
                         "image_prompt": s.image_prompt,
                         "duration_seconds": s.duration_seconds,
                         "image_path": s.image_path,
-                        "image_path": s.image_path,
                         "audio_path": s.audio_path,
                         "video_path": s.video_path,
                         "emotion": s.emotion,
                         "sfx": s.sfx,
-                        "camera_action": s.camera_action
+                        "camera_action": s.camera_action,
                     }
                     for s in self.scenes
-                ]
+                ],
             }
             json.dump(data, f, indent=4, ensure_ascii=False)
 
@@ -55,6 +56,8 @@ class VideoScript:
             f.write(f"# {self.topic}\n\n")
             f.write(f"**Visual Style**: {self.visual_style}\n\n")
             f.write(f"**Character Profiles**: {self.character_profiles}\n\n")
+            if self.intro_hook:
+                f.write(f"**Intro Hook**: {self.intro_hook}\n\n")
             f.write("---\n\n")
             
             for scene in self.scenes:
@@ -90,5 +93,6 @@ class VideoScript:
             scenes=scenes,
             visual_style=data.get("visual_style", ""),
             character_profiles=data.get("character_profiles", ""),
-            summary=data.get("summary", "")  # 向后兼容，默认为空字符串
+            summary=data.get("summary", ""),
+            intro_hook=data.get("intro_hook", ""),
         )

@@ -175,6 +175,7 @@ async def run_step_video(topic: str, subtitle: str = ""):
         topic=topic,
         subtitle=subtitle,
         category=C.CURRENT_CATEGORY,
+        intro_hook=script.intro_hook,
     )
     if output_path:
         logger.info(f"SUCCESS! Video available at: {output_path}")

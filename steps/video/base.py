@@ -587,6 +587,7 @@ class VideoAssemblerBase(ABC):
         topic: str = "",
         subtitle: str = "",
         category: str = "",
+        intro_hook: str = "",
     ):
         logger.info("Assembling video clips...")
         clips = []
@@ -760,23 +761,22 @@ class VideoAssemblerBase(ABC):
 
                     # --- 片头配音 (Dubbing) 逻辑 ---
                     enable_dub = getattr(C, "ENABLE_CUSTOM_INTRO_DUB", False)
-                    dub_text_config = getattr(C, "CUSTOM_INTRO_DUB_TEXT", "")
+                    # enable_ai_hook = getattr(C, "ENABLE_AI_INTRO_HOOK", False) # 实际上与 enable_custom_intro_dub 合并
 
-                    # Resolve dub text based on intro filename
+                    # Resolve dub text priorities
+                    # 1. AI Hook (Highest)
                     dub_text = ""
-                    if isinstance(dub_text_config, dict):
-                        # Extract filename from intro_path e.g. "1.mp4"
-                        intro_filename = os.path.basename(intro_path)
-                        dub_text = dub_text_config.get(intro_filename)
-                        if not dub_text:
-                            dub_text = dub_text_config.get("default", "")
-                    else:
-                        dub_text = str(dub_text_config)
+
+                    if enable_dub and intro_hook:
+                        dub_text = intro_hook
+                        logger.info(f"🧠 Using AI Generated Intro Hook: {dub_text}")
+                    elif enable_dub:
+                        logger.info(
+                            "⚠️ Enable Custom Intro Dub is ON, but no intro_hook found in script."
+                        )
 
                     if enable_dub and dub_text:
-                        logger.info(
-                            f"🎤 Generating Intro Dub for {os.path.basename(intro_path)}: {dub_text[:15]}..."
-                        )
+                        logger.info(f"🎤 Generating Intro Dub: {dub_text[:15]}...")
                         dub_audio_path = os.path.join(C.OUTPUT_DIR, "intro_dub.mp3")
                         if self._generate_intro_dub_sync(dub_text, dub_audio_path):
                             if os.path.exists(dub_audio_path):
@@ -807,6 +807,14 @@ class VideoAssemblerBase(ABC):
                                     intro_clip = concatenate_videoclips(
                                         [intro_clip, freeze_clip]
                                     )
+                                    # Update duration for sync logic below
+                                    # intro_clip duration is now longer
+
+                                    # If Audio < Video, keep video as is (audio centered or start)
+                                    # MoviePy handles this by keeping video duration
+                                    # But we might want to ensure audio isn't cut if we trimmed video?
+                                    # (We actully extend video if needed, so strict > logic is fine)
+
                                     intro_clip = intro_clip.set_audio(
                                         new_audio
                                     )  # 重新确保音轨完整
