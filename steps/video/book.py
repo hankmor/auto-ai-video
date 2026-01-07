@@ -133,12 +133,18 @@ class BookVideoAssembler(VideoAssemblerBase):
             text_en, font_en, layout["text_area_w"], draw_obj
         )
 
-        # 计算背景框
+        # 计算英文高度
         line_height = int(base_font_size * 1.3)
         total_text_h = len(lines) * line_height + 40
-        chinese_h = int(base_font_size * 0.8) + int(base_font_size * 0.8 * 0.6) + 30
-        total_content_h = total_text_h + chinese_h
 
+        # 🔥 先计算中文实际高度（不渲染）
+        chinese_h = self._calculate_chinese_pinyin_height(
+            draw, text_cn, layout, base_font_size
+        )
+
+        total_content_h = total_text_h + chinese_h + 20  # 20是间距
+
+        # 绘制背景框
         box_pad = 15
         bg_box = [
             layout["pane_x_margin"],
@@ -164,6 +170,50 @@ class BookVideoAssembler(VideoAssemblerBase):
         self._render_chinese_pinyin(
             draw, text_cn, current_y, layout, base_font_size, draw_obj
         )
+
+    def _calculate_chinese_pinyin_height(self, draw, text_cn, layout, base_font_size):
+        """
+        计算中文拼音部分的实际渲染高度（不渲染）
+
+        Returns:
+            int: 实际需要的高度（像素）
+        """
+        fs_hanzi = int(base_font_size * 0.8)
+        fs_pinyin = int(fs_hanzi * 0.6)
+        font_hanzi = font_manager.get_font("chinese", fs_hanzi)
+        font_pinyin = font_manager.get_font("chinese", fs_pinyin)
+
+        pinyin_list = pypinyin.pinyin(text_cn, style=pypinyin.Style.TONE)
+        rows = []
+        current_row = []
+        current_row_width = 0
+        spacing = 4
+
+        for i, char in enumerate(text_cn):
+            bbox_c = draw.textbbox((0, 0), char, font=font_hanzi)
+            w_char = bbox_c[2] - bbox_c[0]
+
+            p_str = pinyin_list[i][0] if i < len(pinyin_list) else ""
+            bbox_p = draw.textbbox((0, 0), p_str, font=font_pinyin)
+            w_pin = bbox_p[2] - bbox_p[0]
+
+            cell_width = max(w_char, w_pin)
+
+            if current_row_width + cell_width > layout["text_area_w"]:
+                rows.append(current_row)
+                current_row = []
+                current_row_width = 0
+
+            current_row.append({"cell_width": cell_width})
+            current_row_width += cell_width + spacing
+
+        if current_row:
+            rows.append(current_row)
+
+        # 计算总高度
+        row_height = fs_hanzi + fs_pinyin + 10
+        total_height = len(rows) * row_height
+        return total_height
 
     def _render_chinese_pinyin(
         self, draw, text_cn, start_y, layout, base_font_size, draw_obj
