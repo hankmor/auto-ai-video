@@ -101,96 +101,190 @@ class VideoAssemblerBase(ABC):
                 return None
         return None
 
+    # ==================== Easing Functions ====================
+    @staticmethod
+    def _ease_in_out_cubic(t):
+        """三次缓动函数，平滑加速和减速"""
+        if t < 0.5:
+            return 4 * t * t * t
+        else:
+            return 1 - pow(-2 * t + 2, 3) / 2
+
+    @staticmethod
+    def _ease_out_quad(t):
+        """二次缓动函数，快速开始，缓慢结束"""
+        return 1 - (1 - t) * (1 - t)
+
+    @staticmethod
+    def _ease_in_out_sine(t):
+        """正弦缓动函数，非常平滑"""
+        return -(math.cos(math.pi * t) - 1) / 2
+
+    def _calculate_zoom_transform(self, w, h, progress, scale_factor, is_zoom_in):
+        """计算缩放变换参数"""
+        if is_zoom_in:
+            current_scale = 1.0 + (scale_factor - 1.0) * progress
+        else:
+            current_scale = scale_factor - (scale_factor - 1.0) * progress
+
+        crop_w = w / current_scale
+        crop_h = h / current_scale
+        x1 = (w - crop_w) / 2
+        y1 = (h - crop_h) / 2
+
+        return current_scale, x1, y1, crop_w, crop_h
+
+    def _calculate_pan_transform(self, w, h, progress, pan_scale, direction):
+        """计算平移变换参数"""
+        current_scale = pan_scale
+        crop_w = w / current_scale
+        crop_h = h / current_scale
+        max_x = w - crop_w
+        max_y = h - crop_h
+
+        if direction == "left":
+            x1 = max_x * (1 - progress)
+            y1 = max_y / 2
+        elif direction == "right":
+            x1 = max_x * progress
+            y1 = max_y / 2
+        elif direction == "up":
+            x1 = max_x / 2
+            y1 = max_y * (1 - progress)
+        elif direction == "down":
+            x1 = max_x / 2
+            y1 = max_y * progress
+        else:
+            x1 = (w - crop_w) / 2
+            y1 = (h - crop_h) / 2
+
+        return current_scale, x1, y1, crop_w, crop_h
+
+    def _calculate_combined_transform(
+        self, w, h, progress, scale_factor, pan_scale, action_parts
+    ):
+        """计算组合运动变换参数"""
+        # 解析zoom部分
+        if "zoom" in action_parts:
+            if "in" in action_parts:
+                current_scale = 1.0 + (scale_factor - 1.0) * progress
+            elif "out" in action_parts:
+                current_scale = scale_factor - (scale_factor - 1.0) * progress
+            else:
+                current_scale = pan_scale
+        else:
+            current_scale = pan_scale
+
+        crop_w = w / current_scale
+        crop_h = h / current_scale
+        max_x = w - crop_w
+        max_y = h - crop_h
+
+        # 解析pan部分
+        if "left" in action_parts:
+            x1, y1 = max_x * (1 - progress), max_y / 2
+        elif "right" in action_parts:
+            x1, y1 = max_x * progress, max_y / 2
+        elif "up" in action_parts:
+            x1, y1 = max_x / 2, max_y * (1 - progress)
+        elif "down" in action_parts:
+            x1, y1 = max_x / 2, max_y * progress
+        else:
+            x1, y1 = (w - crop_w) / 2, (h - crop_h) / 2
+
+        return current_scale, x1, y1, crop_w, crop_h
+
+    def _apply_rotation_if_enabled(self, img, rotation_angle):
+        """应用旋转效果（如果启用）"""
+        if abs(rotation_angle) > 0.01:
+            return img.rotate(rotation_angle, resample=Image.BICUBIC, expand=False)
+        return img
+
     def apply_camera_movement(
         self,
         clip: ImageClip,
         duration: float,
         action: str = "zoom_in",
-        scale_factor: float = 1.15,
+        scale_factor: float = None,
     ) -> VideoClip:
         """
-        应用肯·伯恩斯（Ken Burns）风格的镜头运动：放大/缩小，上下左右平移。
-        Apply Ken Burns style camera movements: Zoom In/Out, Pan Left/Right/Up/Down.
+        应用增强的肯·伯恩斯（Ken Burns）风格镜头运动。
+        支持缓动函数、组合运动和可选旋转效果。
         """
         w, h = clip.size
 
-        # 确保平移时的缩放比例足够
-        pan_scale = 1.15
+        # 从配置获取参数
+        enable_easing = getattr(C, "CAMERA_ENABLE_EASING", True)
+        enable_rotation = getattr(C, "CAMERA_ENABLE_ROTATION", False)
+        rotation_degree = getattr(C, "CAMERA_ROTATION_DEGREE", 1.5)
+
+        if scale_factor is None:
+            scale_factor = getattr(C, "CAMERA_MOVEMENT_INTENSITY", 1.15)
+
+        pan_scale = scale_factor
 
         def make_frame(t):
-            progress = t / duration
+            raw_progress = t / duration
+            progress = (
+                self._ease_in_out_cubic(raw_progress) if enable_easing else raw_progress
+            )
 
-            # --- 缩放逻辑 (Zoom Logic) ---
+            rotation_angle = 0
+
+            # 根据不同的action类型调用对应的变换计算方法
             if action == "zoom_in":
-                current_scale = 1.0 + (scale_factor - 1.0) * progress
-                crop_w = w / current_scale
-                crop_h = h / current_scale
-                x1 = (w - crop_w) / 2
-                y1 = (h - crop_h) / 2
+                current_scale, x1, y1, crop_w, crop_h = self._calculate_zoom_transform(
+                    w, h, progress, scale_factor, is_zoom_in=True
+                )
+                if enable_rotation:
+                    rotation_angle = rotation_degree * progress
 
             elif action == "zoom_out":
-                # 缩放的反向操作：从放大状态开始，恢复到 1.0
-                current_scale = scale_factor - (scale_factor - 1.0) * progress
-                crop_w = w / current_scale
-                crop_h = h / current_scale
-                x1 = (w - crop_w) / 2
-                y1 = (h - crop_h) / 2
+                current_scale, x1, y1, crop_w, crop_h = self._calculate_zoom_transform(
+                    w, h, progress, scale_factor, is_zoom_in=False
+                )
+                if enable_rotation:
+                    rotation_angle = -rotation_degree * progress
 
-            # --- 平移逻辑 (固定缩放，移动裁剪框) ---
             elif action.startswith("pan_"):
-                # 始终稍微放大一点以允许移动空间
-                current_scale = pan_scale
-                crop_w = w / current_scale
-                crop_h = h / current_scale
+                direction = action.replace("pan_", "")
+                current_scale, x1, y1, crop_w, crop_h = self._calculate_pan_transform(
+                    w, h, progress, pan_scale, direction
+                )
 
-                max_x = w - crop_w
-                max_y = h - crop_h
-
-                if action == "pan_left":
-                    # 镜头左移 = 画面呈现从右向左移动的效果 (视野向左扫)
-                    # 实际上是将裁剪框从右向左移
-                    # x1 从 max_x -> 0
-                    x1 = max_x * (1 - progress)
-                    y1 = max_y / 2
-
-                elif action == "pan_right":
-                    # 镜头右移 = 画面呈现从左向右移动的效果
-                    # x1 从 0 -> max_x
-                    x1 = max_x * progress
-                    y1 = max_y / 2
-
-                elif action == "pan_up":
-                    # 镜头上移 = 视野向上扫 (先看下面，再看上面)
-                    # y1 从 max_y -> 0
-                    x1 = max_x / 2
-                    y1 = max_y * (1 - progress)
-
-                elif action == "pan_down":
-                    # 镜头下移 = 视野向下扫 (先看上面，再看下面)
-                    # y1 从 0 -> max_y
-                    x1 = max_x / 2
-                    y1 = max_y * progress
-
-                else:
-                    # 默认/回退到中心静止 (或轻微呼吸效果)
-                    x1 = (w - crop_w) / 2
-                    y1 = (h - crop_h) / 2
-
+            elif "_" in action and not action.startswith("pan_"):
+                # 组合运动
+                action_parts = action.split("_")
+                current_scale, x1, y1, crop_w, crop_h = (
+                    self._calculate_combined_transform(
+                        w, h, progress, scale_factor, pan_scale, action_parts
+                    )
+                )
+                if enable_rotation:
+                    rotation_angle = rotation_degree * math.sin(progress * math.pi)
             else:
                 # 静止或未知动作
                 return clip.get_frame(t)
 
-            # --- 渲染帧 ---
+            # 渲染帧
             frame = clip.get_frame(0)
             img_pil = Image.fromarray(frame)
             img_cropped = img_pil.crop((x1, y1, x1 + crop_w, y1 + crop_h))
 
+            # 应用旋转
+            if enable_rotation:
+                img_cropped = self._apply_rotation_if_enabled(
+                    img_cropped, rotation_angle
+                )
+
+            # 缩放回原始尺寸
             if hasattr(Image, "Resampling"):
                 resample_method = Image.Resampling.LANCZOS
             else:
                 resample_method = getattr(
                     Image, "LANCZOS", getattr(Image, "ANTIALIAS", 1)
                 )
+
             img_resized = img_cropped.resize((w, h), resample=resample_method)
             return np.array(img_resized)
 

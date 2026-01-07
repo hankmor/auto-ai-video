@@ -141,6 +141,12 @@ class Config:
     BILINGUAL_AUDIO_PAUSE: float = 1.0
     BILINGUAL_CN_VOICE: str = ""  # 双语模式中文朗读音色，为空则使用默认音色
 
+    # Camera Effects
+    CAMERA_ENABLE_EASING: bool = True  # 启用缓动函数
+    CAMERA_ENABLE_ROTATION: bool = False  # 启用旋转效果
+    CAMERA_ROTATION_DEGREE: float = 1.5  # 旋转角度
+    CAMERA_MOVEMENT_INTENSITY: float = 1.15  # 运动强度
+
     # Logging Configuration
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -368,6 +374,24 @@ class Config:
             self.BILINGUAL_CN_VOICE = data["features"].get(
                 "bilingual_cn_voice", self.BILINGUAL_CN_VOICE
             )
+
+            # Camera Effects配置
+            camera_effects = data["features"].get("camera_effects", {})
+            if camera_effects:
+                self.CAMERA_ENABLE_EASING = camera_effects.get(
+                    "enable_easing", self.CAMERA_ENABLE_EASING
+                )
+                self.CAMERA_ENABLE_ROTATION = camera_effects.get(
+                    "enable_rotation", self.CAMERA_ENABLE_ROTATION
+                )
+                self.CAMERA_ROTATION_DEGREE = float(
+                    camera_effects.get("rotation_degree", self.CAMERA_ROTATION_DEGREE)
+                )
+                self.CAMERA_MOVEMENT_INTENSITY = float(
+                    camera_effects.get(
+                        "movement_intensity", self.CAMERA_MOVEMENT_INTENSITY
+                    )
+                )
 
         # 加载日志配置
         if "logging" in data:
