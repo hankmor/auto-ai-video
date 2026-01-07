@@ -834,6 +834,98 @@ class VideoAssemblerBase(ABC):
                 )
         return None
 
+    def _load_scene_assets(
+        self, scene: Scene, action_map: dict, i: int, padding: float
+    ):
+        """
+        加载场景的音频和视觉资源
+
+        Returns:
+            tuple: (audio_clip, visual_clip, duration) 或 (None, None, None) 如果失败
+        """
+        try:
+            # 解析运镜动作
+            raw_action = getattr(scene, "camera_action", "zoom_in")
+            scene.camera_action = action_map.get(raw_action, "zoom_in")
+
+            # 加载音频并计算时长
+            audio_clip = AudioFileClip(scene.audio_path).fx(afx.audio_fadeout, 0.05)
+            duration = audio_clip.duration + 0.5  # audio_padding
+            if padding < 0 and i > 0:
+                duration += abs(padding)
+
+            # 加载视觉
+            logger.debug(f"   ➡️ Scene {i}: Loading visual from {scene.image_path}")
+            visual_clip = self._load_visual(scene, duration)
+            if not visual_clip:
+                logger.warning(
+                    f"   ⚠️ Scene {i}: visual_clip is ALREADY None after _load_visual"
+                )
+                return None, None, None
+
+            logger.debug(f"   ✅ Scene {i}: Visual loaded: {visual_clip.size}")
+            return audio_clip, visual_clip, duration
+
+        except Exception as e:
+            logger.exception(f"Failed to load assets for scene {scene.scene_id}")
+            return None, None, None
+
+    def _sync_audio_video(self, visual_clip, audio_clip, duration):
+        """
+        同步音频和视频，设置duration
+
+        Returns:
+            合成后的visual_clip
+        """
+        padded_audio = CompositeAudioClip([audio_clip.set_start(0)]).set_duration(
+            duration
+        )
+        return visual_clip.set_audio(padded_audio).set_duration(duration)
+
+    def _apply_transition(
+        self,
+        clips,
+        visual_clip,
+        prev_scene,
+        current_scene,
+        i,
+        trans_type,
+        trans_duration,
+        padding,
+    ):
+        """
+        应用转场效果
+
+        Args:
+            clips: 当前clips列表
+            visual_clip: 当前场景的visual clip
+            prev_scene: 前一个场景
+            current_scene: 当前场景
+            i: 场景索引
+            trans_type: 转场类型
+            trans_duration: 转场时长
+            padding: 重叠时间（负数表示重叠）
+
+        Returns:
+            处理后的visual_clip
+        """
+        # 翻书转场
+        if trans_type == "page_turn" and prev_scene:
+            trans_clip = self.create_page_flip_transition(
+                prev_scene.image_path, current_scene.image_path, trans_duration
+            )
+            if trans_clip:
+                clips.append(trans_clip)
+
+        # 重叠转场效果
+        if padding < 0 and i > 0:
+            if trans_type == "circle_open":
+                visual_clip = self.apply_circle_open(visual_clip, abs(padding))
+            elif trans_type.startswith("crossfade"):
+                visual_clip = visual_clip.crossfadein(abs(padding))
+
+        return visual_clip
+
     def _process_scenes(
         self,
         scenes: List[Scene],
@@ -850,31 +942,15 @@ class VideoAssemblerBase(ABC):
             if not scene.audio_path:
                 continue
             try:
-                # 解析运镜动作
-                raw_action = getattr(scene, "camera_action", "zoom_in")
-                scene.camera_action = action_map.get(raw_action, "zoom_in")
-
-                # 加载音频并计算时长
-                audio_clip = AudioFileClip(scene.audio_path).fx(afx.audio_fadeout, 0.05)
-                duration = audio_clip.duration + 0.5  # audio_padding
-                if padding < 0 and i > 0:
-                    duration += abs(padding)
-
-                # 加载视觉
-                logger.info(f"   ➡️ Scene {i}: Loading visual from {scene.image_path}")
-                visual_clip = self._load_visual(scene, duration)
+                # 1. 加载资源（使用辅助方法）
+                audio_clip, visual_clip, duration = self._load_scene_assets(
+                    scene, action_map, i, padding
+                )
                 if not visual_clip:
-                    logger.warning(
-                        f"   ⚠️ Scene {i}: visual_clip is ALREADY None after _load_visual"
-                    )
                     continue
-                logger.info(f"   ✅ Scene {i}: Visual loaded: {visual_clip.size}")
 
-                # 设置音频
-                padded_audio = CompositeAudioClip(
-                    [audio_clip.set_start(0)]
-                ).set_duration(duration)
-                visual_clip = visual_clip.set_audio(padded_audio).set_duration(duration)
+                # 2. 同步音视频（使用辅助方法）
+                visual_clip = self._sync_audio_video(visual_clip, audio_clip, duration)
 
                 # 合成场景（添加字幕等）
                 narration_cn_log = getattr(scene, "narration_cn", "") or "N/A"
@@ -884,20 +960,17 @@ class VideoAssemblerBase(ABC):
                 visual_clip = self._compose_scene(scene, visual_clip, duration)
                 logger.info(f"   ✅ 场景 {scene.scene_id} 合成完成")
 
-                # 翻书转场
-                if trans_type == "page_turn" and prev_scene_node:
-                    trans_clip = self.create_page_flip_transition(
-                        prev_scene_node.image_path, scene.image_path, trans_duration
-                    )
-                    if trans_clip:
-                        clips.append(trans_clip)
-
-                # 重叠转场效果
-                if padding < 0 and i > 0:
-                    if trans_type == "circle_open":
-                        visual_clip = self.apply_circle_open(visual_clip, abs(padding))
-                    elif trans_type.startswith("crossfade"):
-                        visual_clip = visual_clip.crossfadein(abs(padding))
+                # 4. 应用转场（使用辅助方法）
+                visual_clip = self._apply_transition(
+                    clips,
+                    visual_clip,
+                    prev_scene_node,
+                    scene,
+                    i,
+                    trans_type,
+                    trans_duration,
+                    padding,
+                )
 
                 clips.append(visual_clip)
                 prev_scene_node = scene
@@ -938,7 +1011,7 @@ class VideoAssemblerBase(ABC):
             return main_clip, bgm_start_time
 
         try:
-            logger.info(f"Adding custom intro video from {intro_path}")
+            logger.debug(f"Adding custom intro video from {intro_path}")
             intro_clip = VideoFileClip(intro_path)
 
             # 添加配音
@@ -988,6 +1061,72 @@ class VideoAssemblerBase(ABC):
 
         return intro_path
 
+    def _adjust_intro_audio_for_video(
+        self, new_audio, intro_clip, dub_audio_path, intro_hook
+    ):
+        """
+        调整intro音频长度以匹配视频
+        如果音频过长，尝试加速重新生成（最多30%）
+
+        Returns:
+            调整后的audio clip
+        """
+        if new_audio.duration <= intro_clip.duration:
+            return new_audio
+
+        ratio = new_audio.duration / intro_clip.duration
+        if ratio > 1.3:
+            logger.debug(
+                f"⚠️ Audio is much longer ({ratio:.2f}x). Capping speedup to +30% and extending video."
+            )
+            return self._regenerate_faster_intro_dub(
+                new_audio,
+                intro_clip,
+                dub_audio_path,
+                intro_hook,
+                max_speed_increase=0.3,
+            )
+        else:
+            logger.debug(
+                f"⚠️ Intro Audio ({new_audio.duration:.2f}s) > Video ({intro_clip.duration:.2f}s). Regenerating to fit..."
+            )
+            return self._regenerate_faster_intro_dub(
+                new_audio, intro_clip, dub_audio_path, intro_hook
+            )
+
+    def _sync_intro_clip_with_audio(self, intro_clip, new_audio):
+        """
+        同步intro视频和音频长度
+        - 如果音频短，裁剪视频
+        - 如果音频长，延长视频（使用最后一帧）
+
+        Returns:
+            调整后的intro_clip
+        """
+        # 设置音频
+        intro_clip = intro_clip.without_audio().set_audio(new_audio)
+
+        # 如果音频比视频短，裁剪视频
+        if intro_clip.duration > new_audio.duration:
+            logger.debug(
+                f"✂️ 裁剪片头视频: {intro_clip.duration:.2f}s -> {new_audio.duration:.2f}s"
+            )
+            return intro_clip.subclip(0, new_audio.duration)
+
+        # 如果音频比视频长，延长视频
+        elif new_audio.duration > intro_clip.duration:
+            diff = new_audio.duration - intro_clip.duration
+            logger.debug(f"🐢 延长片头视频以匹配音频: +{diff:.2f}s")
+            # 使用最后一帧定格
+            last_frame = intro_clip.get_frame(intro_clip.duration - 0.05)
+            freeze_clip = (
+                ImageClip(last_frame).set_duration(diff).set_fps(intro_clip.fps)
+            )
+            intro_clip = concatenate_videoclips([intro_clip, freeze_clip])
+            intro_clip = intro_clip.set_audio(new_audio)
+
+        return intro_clip
+
     def _add_intro_dubbing(self, intro_clip, intro_hook: str):
         """为片头添加配音"""
         if not getattr(C, "ENABLE_CUSTOM_INTRO_DUB", False) or not intro_hook:
@@ -1013,52 +1152,13 @@ class VideoAssemblerBase(ABC):
 
         new_audio = AudioFileClip(dub_audio_path)
 
-        # 如果音频过长，尝试适度加速重新生成 (Max +30%)
-        if new_audio.duration > intro_clip.duration:
-            ratio = new_audio.duration / intro_clip.duration
-            if ratio > 1.3:
-                logger.info(
-                    f"⚠️ Audio is much longer ({ratio:.2f}x). Capping speedup to +30% and extending video."
-                )
-                # 只加速 30%
-                new_audio = self._regenerate_faster_intro_dub(
-                    new_audio,
-                    intro_clip,
-                    dub_audio_path,
-                    intro_hook,
-                    max_speed_increase=0.3,
-                )
-            else:
-                logger.info(
-                    f"⚠️ Intro Audio ({new_audio.duration:.2f}s) > Video ({intro_clip.duration:.2f}s). Regenerating to fit..."
-                )
-                new_audio = self._regenerate_faster_intro_dub(
-                    new_audio, intro_clip, dub_audio_path, intro_hook
-                )
+        # 1. 调整音频长度（如果需要）
+        new_audio = self._adjust_intro_audio_for_video(
+            new_audio, intro_clip, dub_audio_path, intro_hook
+        )
 
-        # 设置音频
-        intro_clip = intro_clip.without_audio().set_audio(new_audio)
-
-        # 再次检查：如果音频现在比视频短，裁剪视频
-        if intro_clip.duration > new_audio.duration:
-            logger.info(
-                f"✂️ 裁剪片头视频: {intro_clip.duration:.2f}s -> {new_audio.duration:.2f}s"
-            )
-            intro_clip = intro_clip.subclip(0, new_audio.duration)
-
-        # 如果音频依然比视频长 (说明加速后还是长，或者被 Cap 了)，则延长视频
-        elif new_audio.duration > intro_clip.duration:
-            diff = new_audio.duration - intro_clip.duration
-            logger.info(f"🐢 延长片头视频以匹配音频: +{diff:.2f}s")
-            # 使用最后一帧定格来填充剩余时间
-            last_frame = intro_clip.get_frame(intro_clip.duration - 0.05)
-            freeze_clip = (
-                ImageClip(last_frame).set_duration(diff).set_fps(intro_clip.fps)
-            )
-            intro_clip = concatenate_videoclips([intro_clip, freeze_clip])
-            intro_clip = intro_clip.set_audio(new_audio)
-
-        return intro_clip
+        # 2. 同步视频和音频
+        return self._sync_intro_clip_with_audio(intro_clip, new_audio)
 
     def _regenerate_faster_intro_dub(
         self,
@@ -1133,7 +1233,7 @@ class VideoAssemblerBase(ABC):
         scale = max(ratio_w, ratio_h)
         new_w, new_h = int(w * scale), int(h * scale)
 
-        logger.info(f"🎬 片头视频缩放: {w}x{h} -> {new_w}x{new_h} (scale={scale:.3f})")
+        logger.debug(f"🎬 片头视频缩放: {w}x{h} -> {new_w}x{new_h} (scale={scale:.3f})")
 
         if scale != 1.0:
             intro_clip = intro_clip.resize(newsize=(new_w, new_h))
@@ -1187,8 +1287,8 @@ class VideoAssemblerBase(ABC):
             bgm_clip = AudioFileClip(bgm_file)
             bgm_duration = max(0, final_clip.duration - bgm_start_time)
 
-            logger.info(f"🎶 BGM Logic: File={bgm_file}")
-            logger.info(
+            logger.debug(f"🎶 BGM Logic: File={bgm_file}")
+            logger.debug(
                 f"   Start Time={bgm_start_time:.2f}s, Final Duration={final_clip.duration:.2f}s, BGM Duration={bgm_duration:.2f}s"
             )
 
@@ -1208,7 +1308,7 @@ class VideoAssemblerBase(ABC):
                 )
 
                 final_clip = final_clip.set_audio(final_audio)
-                logger.info("   ✅ BGM mixed successfully.")
+                logger.debug("   ✅ BGM mixed successfully.")
             else:
                 logger.warning("   ⚠️ BGM duration <= 0, skipping mix.")
 

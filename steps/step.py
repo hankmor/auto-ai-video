@@ -174,7 +174,7 @@ async def run_step_video(topic: str, subtitle: str = ""):
         script.scenes,
         topic=topic,
         subtitle=script.title_cn
-        if (C.ENABLE_BILINGUAL_MODE and getattr(script, "title_cn", ""))
+        if (C.IS_BILINGUAL_MODE_ENABLED and getattr(script, "title_cn", ""))
         else (
             subtitle
             if subtitle

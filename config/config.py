@@ -141,6 +141,17 @@ class Config:
     BILINGUAL_AUDIO_PAUSE: float = 1.0
     BILINGUAL_CN_VOICE: str = ""  # 双语模式中文朗读音色，为空则使用默认音色
 
+    # Logging Configuration
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    LOG_CONSOLE_ENABLED: bool = True
+    LOG_CONSOLE_LEVEL: str = "INFO"
+    LOG_FILE_ENABLED: bool = False
+    LOG_FILE_PATH: str = "logs/auto_maker.log"
+    LOG_FILE_LEVEL: str = "DEBUG"
+    LOG_FILE_MAX_BYTES: int = 10485760  # 10MB
+    LOG_FILE_BACKUP_COUNT: int = 5
+
     # 字体设置
     FONTS: dict = field(default_factory=dict)
 
@@ -358,6 +369,23 @@ class Config:
                 "bilingual_cn_voice", self.BILINGUAL_CN_VOICE
             )
 
+        # 加载日志配置
+        if "logging" in data:
+            log_config = data["logging"]
+            self.LOG_LEVEL = log_config.get("level", self.LOG_LEVEL)
+            self.LOG_FORMAT = log_config.get("format", self.LOG_FORMAT)
+
+            if "console" in log_config:
+                self.LOG_CONSOLE_ENABLED = log_config["console"].get("enabled", True)
+                self.LOG_CONSOLE_LEVEL = log_config["console"].get("level", "INFO")
+
+            if "file" in log_config:
+                self.LOG_FILE_ENABLED = log_config["file"].get("enabled", False)
+                self.LOG_FILE_PATH = log_config["file"].get("path", self.LOG_FILE_PATH)
+                self.LOG_FILE_LEVEL = log_config["file"].get("level", "DEBUG")
+                self.LOG_FILE_MAX_BYTES = log_config["file"].get("max_bytes", 10485760)
+                self.LOG_FILE_BACKUP_COUNT = log_config["file"].get("backup_count", 5)
+
     def get_speech_rate(self, category: str) -> str:
         """获取指定类目的语速配置，默认-15%"""
         if not hasattr(self, "_category_speech_rates"):
@@ -414,10 +442,29 @@ class Config:
             self._scene_count_config["default_max"],
         )
 
+    @property
+    def IS_BILINGUAL_MODE_ENABLED(self) -> bool:
+        """
+        判断当前类目是否启用双语模式
+        同时满足两个条件：
+        1. enable_bilingual_mode 开关为 True
+        2. 当前类目为"英语绘本"
+        """
+        return self.ENABLE_BILINGUAL_MODE and self.CURRENT_CATEGORY == "英语绘本"
+
 
 C = Config()
 # 尝试从默认位置加载
 C.load_from_yaml("config.yaml")
+
+# 重新加载logger以应用配置
+try:
+    from util.logger import reload_logger
+
+    reload_logger()
+except Exception as e:
+    # 如果reload失败，忽略错误（使用默认配置）
+    pass
 
 # 确保输出目录存在
 if C.OUTPUT_DIR:

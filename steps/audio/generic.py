@@ -84,7 +84,7 @@ class GenericAudioStudio(AudioStudioBase):
         try:
             emotion = getattr(scene, "emotion", None)
 
-            if C.ENABLE_BILINGUAL_MODE and getattr(scene, "narration_cn", None):
+            if C.IS_BILINGUAL_MODE_ENABLED and getattr(scene, "narration_cn", None):
                 # Bilingual Mode: Generate EN -> Pause -> CN
                 path_en = output_path.replace(".mp3", "_en.mp3")
                 path_cn = output_path.replace(".mp3", "_cn.mp3")

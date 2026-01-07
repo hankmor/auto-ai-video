@@ -5,6 +5,24 @@ project:
   name: "ai-video-maker"
   output_dir: "./output"
 
+# 日志配置
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # 控制台输出
+  console:
+    enabled: true
+    level: "INFO"  # 控制台显示主流程
+  
+  # 文件输出
+  file:
+    enabled: false  # 是否启用文件日志
+    path: "logs/auto_maker.log"
+    level: "DEBUG"  # 文件记录详细日志
+    max_bytes: 10485760  # 10MB
+    backup_count: 5  # 保留5个备份文件
+
 # 字体配置
 fonts:
   # 字体优先级列表。将使用第一个存在的文件。
@@ -373,8 +391,9 @@ features:
   custom_intro_dub_style: "excited" # 风格: tts不支持 cheerful, excited, friendly, Encourage, Angry, Fearful, sad
   custom_intro_dub_pitch: "+0Hz"
   custom_intro_dub_rate: "+0%"
-  # 双语模式 (Bilingual Mode)
-  enable_bilingual_mode: true
+  # 双语模式 (Bilingual Mode) - 仅用于"英语绘本"类目
+  # 同时满足两个条件才启用：1. enable_bilingual_mode=true 2. 类目="英语绘本"
+  enable_bilingual_mode: true  # 总开关
   bilingual_audio_pause: 1.0 # 英文与中文之间的停顿时间(秒)
   bilingual_cn_voice: "zh-CN-XiaoxiaoNeural" # 双语模式中文朗读音色（留空则使用默认）
 

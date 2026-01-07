@@ -342,7 +342,10 @@ class ScriptGeneratorBase(ABC):
                 category_instruction=cat_inst,
                 subtitle_info=f"本章标题: {subtitle}" if subtitle else "",
                 bilingual_json_field=f'"narration_cn": "...",'
-                if C.ENABLE_BILINGUAL_MODE
+                if C.IS_BILINGUAL_MODE_ENABLED
+                else "",
+                bilingual_title_field='"title_cn": "标题的中文翻译（简短）",'
+                if C.CURRENT_CATEGORY == "英语绘本"
                 else "",
             )
             + tipp
