@@ -404,6 +404,14 @@ features:
     rotation_degree: 1.5  # 旋转角度（度）
     movement_intensity: 1.25  # 运动强度 (推荐1.15-1.35，数值越大运动越明显)
 
+  # 2.5D Parallax Effects (视差效果 - 实验性)
+  parallax_effects:
+    enable: false  # 默认关闭，逐步启用
+    model_path: "models/DepthAnythingV2SmallF16.mlpackage"
+    num_layers: 3  # 分层数量（3-5层）
+    movement_scale: 1.2  # 视差运动倍率
+    cache_depth_maps: true  # 缓存深度图
+
 
 # API 密钥和凭证
 # 推荐：将这些设置为环境变量（例如 export ARK_API_KEY=...）

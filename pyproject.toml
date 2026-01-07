@@ -16,3 +16,9 @@ dependencies = [
     "volcengine>=1.0.212",
     "volcengine-python-sdk>=5.0.3",
 ]
+
+[project.optional-dependencies]
+parallax = [
+    "coremltools>=9.0",
+    "transformers>=4.57.3",
+]

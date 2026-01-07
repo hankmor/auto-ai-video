@@ -33,6 +33,15 @@ env/
 .idea/
 .vscode/
 
+# Machine Learning Models
+# 机器学习模型文件（太大，不提交）
+models/*
+!models/README.md
+*.mlmodel
+*.onnx
+*.pt
+*.pth
+
 # Project
 output/
 *.log
