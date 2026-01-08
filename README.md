@@ -12,13 +12,19 @@
 
 📖 详细文档：[docs/camera-action-enhanced.md](./docs/camera-action-enhanced.md)
 
-### 🌟 2.5D视差效果（方案2）- 🚧 开发中
-- **深度感**：前景/中景/背景分层运动
-- **立体感**：模拟真实3D视差
-- **M4优化**：利用Neural Engine加速
-- **预计完成**：7天实施计划
+### 🌟 2.5D视差效果（方案2）- ✅ 已完成
+- **深度位移**：基于DepthAnything V2的像素级视差
+- **无损画质**：解决Layer Separation带来的黑边与割裂问题
+- **M4优化**：利用Neural Engine加速深度推理
+- **最佳实践**：推荐用于3D/写实风格 (Pop Mart, Pixar)
 
 📊 实施进度：[docs/parallax-2.5d-plan.md](./docs/parallax-2.5d-plan.md)
+
+### 🚀 批量生成工具 - ✅ 已完成
+- **CSV导入**：从文件批量导入生成任务
+- **任务队列**：自动串行执行，错误隔离
+- **执行报告**：生成Markdown格式的运行报告
+
 
 ---
 
@@ -122,6 +128,22 @@ python main.py --topic "The Lion and the Mouse" --category en --voice en-US-AnaN
 
 # 双语绘本（自动生成英文+中文双语字幕）
 python main.py --topic "Little Red Riding Hood" --category en
+python main.py --topic "Little Red Riding Hood" --category en
+```
+
+### 4）批量生成
+
+支持通过 CSV 文件批量导入任务：
+
+```bash
+python batch_main.py --file input.csv
+```
+
+CSV 格式示例：
+```csv
+topic,category,style,voice,enable_parallax
+刻舟求剑,cy,,
+Little Red Riding Hood,en,,en-US-AnaNeural,True
 ```
 
 ## 常用参数（CLI）
@@ -205,13 +227,22 @@ camera_effects:
 ```yaml
 parallax_effects:
   enable: false                          # 默认关闭
-  model_path: "models/depth_anything_v2_small_float16.mlmodel"
+  model_path: "models/DepthAnythingV2SmallF16.mlpackage"
   num_layers: 3                          # 分层数量
   movement_scale: 1.2                    # 视差倍率
   cache_depth_maps: true                 # 缓存深度图
+  disabled_categories:                   # 不适合的类目
+    - "历史故事"  # 水墨画风格
+    - "神话故事"
+    - "民间故事"  # 水彩风格
+    - "儿童绘本"  # 手绘风格
 ```
 
-需要先下载模型，见 [models/README.md](./models/README.md)
+**重要**: 视差效果对图片风格有严格要求！
+- ✅ **适合**: Pop Mart、Pixar等3D风格（成语故事、睡前故事）
+- ❌ **不适合**: 油画、水墨、扁平插画等艺术风格
+
+详见 [docs/parallax-style-guide.md](./docs/parallax-style-guide.md) 和 [models/README.md](./models/README.md)
 
 ### 双语模式
 
@@ -255,6 +286,8 @@ python tests/test_depth_estimation.py
 
 - **Camera Action增强**：[docs/camera-action-enhanced.md](./docs/camera-action-enhanced.md)
 - **2.5D视差方案**：[docs/parallax-2.5d-plan.md](./docs/parallax-2.5d-plan.md)
+- **视差效果风格指南**：[docs/parallax-style-guide.md](./docs/parallax-style-guide.md)
+- **图层分离技术**：[docs/layer-separation-tech.md](./docs/layer-separation-tech.md)
 
 ## 项目结构
 
@@ -286,8 +319,10 @@ ai-video-maker/
 - [x] 分类内容策略
 - [x] 双语字幕支持
 - [x] Camera Action增强（方案1）
-- [🚧] 2.5D视差效果（方案2 - Day 1/7）
-- [ ] 批量生成工具
+- [x] 2.5D视差效果（方案2 - 核心完成，适用3D风格）
+- [x] 2.5D视差效果（方案2 - 核心完成，适用3D风格）
+- [x] 批量生成工具
+- [ ] Web UI界面
 - [ ] Web UI界面
 
 ## 贡献

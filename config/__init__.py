@@ -11,6 +11,7 @@ def setup(
     enable_subs: bool = False,
     voice_arg: str = None,
     emotion_arg: str = None,
+    parallax_arg: str = None,
 ):
     """
     设置输出目录并配置图像风格。
@@ -20,6 +21,16 @@ def setup(
     if enable_subs:
         C.ENABLE_SUBTITLES = True
         logger.info("📝 Subtitles Enabled via CLI")
+
+    # Parallax CLI Override
+    if parallax_arg:
+        val = parallax_arg.lower()
+        if val in ("true", "yes", "on", "1"):
+            C.PARALLAX_ENABLE = True
+            logger.info("🌌 Parallax Enabled via CLI")
+        elif val in ("false", "no", "off", "0"):
+            C.PARALLAX_ENABLE = False
+            logger.info("🌌 Parallax Disabled via CLI")
 
     # 0. 解析分类别名
     final_category = category

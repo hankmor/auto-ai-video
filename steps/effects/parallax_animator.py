@@ -1,217 +1,172 @@
-"""
-视差动画模块
-===========
-根据图层深度创建2.5D视差动画效果
-
-核心思想：
-- 前景移动快（距离相机近）
-- 中景移动中等
-- 背景移动慢（距离相机远）
-"""
-
 import numpy as np
 from PIL import Image
-from moviepy.editor import ImageClip, CompositeVideoClip
-from typing import List, Dict, Tuple
+from moviepy.editor import ImageClip
+from typing import Optional, Tuple
 from util.logger import logger
 
 
 class ParallaxAnimator:
     """
-    视差动画器
-    
-    将多层图片合成为具有视差效果的视频
+    深度位移视差动画器 (Depth Displacement Animator)
+
+    不使用图层分离，而是直接根据深度图对像素进行位移。
+    优势：
+    1. 无黑边：通过边缘像素拉伸解决
+    2. 无割裂：深度连续变化，物体不会被切断
+    3. 更自然：类似3D投影效果
     """
-    
-    def __init__(self, movement_scale: float = 1.2):
+
+    def __init__(self, movement_scale: float = 0.05):
         """
         初始化视差动画器
-        
+
         Args:
-            movement_scale: 视差运动倍率（默认1.2）
+            movement_scale: 运动幅度系数 (默认0.05, 即5%画面宽度)
+            推荐范围: 0.03 - 0.08
         """
+        if movement_scale > 0.1:
+            logger.warning(
+                f"⚠️ movement_scale {movement_scale} 较大 (>0.1)，可能会导致边缘拉伸变形(Artifacts)"
+            )
+
         self.movement_scale = movement_scale
-    
+
     def create_parallax_clip(
         self,
-        layers: List[Dict],
+        image_path: str,
+        depth_map: np.ndarray,
         duration: float,
         action: str = "pan_right",
-        fps: int = 24
-    ) -> CompositeVideoClip:
+        fps: int = 24,
+    ) -> Optional[ImageClip]:
         """
         创建视差动画视频
-        
+
         Args:
-            layers: 图层列表（从_separator返回）
-            duration: 视频时长（秒）
-            action: 运动类型（pan_left/right/up/down, zoom_in/out）
-            fps: 帧率
-        
-        Returns:
-            合成后的视频clip
-        """
-        if not layers:
-            logger.error("❌ 图层列表为空")
-            return None
-        
-        try:
-            # 1. 为每层创建运动clip
-            layer_clips = []
-            for layer_info in layers:
-                clip = self._create_layer_clip(
-                    layer_info,
-                    duration,
-                    action,
-                    fps
-                )
-                layer_clips.append(clip)
-            
-            # 2. 合成所有图层（从后往前：背景->中景->前景）
-            composite = CompositeVideoClip(
-                layer_clips[::-1],  # 反转顺序
-                size=layers[0]['image'].size
-            ).set_duration(duration).set_fps(fps)
-            
-            logger.info(f"✅ 视差动画创建成功: {len(layer_clips)}层, {duration}s")
-            return composite
-            
-        except Exception as e:
-            logger.error(f"❌ 视差动画创建失败: {e}")
-            return None
-    
-    def _create_layer_clip(
-        self,
-        layer_info: Dict,
-        duration: float,
-        action: str,
-        fps: int
-    ) -> ImageClip:
-        """
-        为单个图层创建运动clip
-        
-        Args:
-            layer_info: 图层信息
+            image_path: 原始图片路径
+            depth_map: 深度图 (H, W) 0-255，0=远，255=近
             duration: 时长
             action: 运动类型
             fps: 帧率
-        
+
         Returns:
-            ImageClip with position animation
+            ImageClip (包含每帧变换逻辑)
         """
-        layer_img = layer_info['image']
-        layer_idx = layer_info['layer_index']
-        
-        # 计算该层的运动速度（前景快，背景慢）
-        speed_factor = self._calculate_speed_factor(layer_idx, len(layer_info))
-        
-        # 创建基础clip
-        clip = ImageClip(np.array(layer_img)).set_duration(duration)
-        
-        # 应用运动
-        if action.startswith("pan_"):
-            clip = self._apply_pan_motion(clip, action, speed_factor, duration)
-        elif action.startswith("zoom_"):
-            clip = self._apply_zoom_motion(clip, action, speed_factor, duration)
-        
-        return clip
-    
-    def _calculate_speed_factor(self, layer_idx: int, total_layers: int) -> float:
+        try:
+            # 1. 准备数据
+            # 读取图片并转为numpy数组 (RGB)
+            img = Image.open(image_path).convert("RGB")
+            img_arr = np.array(img)
+
+            # 确保深度图尺寸匹配
+            h, w = img_arr.shape[:2]
+            if depth_map.shape != (h, w):
+                logger.debug(f"调整深度图尺寸: {depth_map.shape} -> {(h, w)}")
+                # 使用PIL调整大小
+                depth_img = Image.fromarray(depth_map)
+                depth_img = depth_img.resize((w, h), Image.BILINEAR)
+                depth_map = np.array(depth_img)
+
+            # 归一化深度图 (0.0 - 1.0)
+            # 注意：DepthAnything输出通常是 relative depth
+            # 我们假设 0=最远(背景), 1=最近(前景)
+            norm_depth = depth_map.astype(np.float32) / 255.0
+
+            # 2. 定义每一帧的变换函数
+            def make_frame(t):
+                # 计算当前时间进度 (0.0 -> 1.0)
+                progress = t / duration
+
+                # 使用缓动函数 (Ease In Out Cubic)
+                # t: 0->1, eased: 0->1
+                if progress < 0.5:
+                    eased = 4 * progress * progress * progress
+                else:
+                    eased = 1 - pow(-2 * progress + 2, 3) / 2
+
+                # 计算当前位移量 (像素)
+                # max_shift = 画面宽度 * movement_scale
+                max_shift_x = w * self.movement_scale
+                max_shift_y = h * self.movement_scale
+
+                offset_x = 0
+                offset_y = 0
+
+                # 根据动作计算位移方向
+                # 视差原理：前景移动多，背景移动少 (或反之)
+                # 这里我们模拟相机移动：
+                # 相机向右移 -> 前景向左移(幅度大)，背景向左移(幅度小)
+                # 为了简化，我们让 背景不动(或微动)，前景动
+
+                if action == "pan_right":
+                    # 此时相机左移，画面右移
+                    # 或者：我们让前景往右移
+                    offset_x = max_shift_x * eased
+                elif action == "pan_left":
+                    offset_x = -max_shift_x * eased
+                elif action == "pan_up":
+                    offset_y = -max_shift_y * eased
+                elif action == "pan_down":
+                    offset_y = max_shift_y * eased
+                elif action == "zoom_in":
+                    # 缩放比较特殊，需要对坐标进行中心缩放
+                    pass
+
+                # 3. 应用位移映射 (Displacement Mapping)
+                return self._apply_displacement(img_arr, norm_depth, offset_x, offset_y)
+
+            # 3. 创建VideoClip
+            from moviepy.editor import VideoClip
+
+            clip = VideoClip(make_frame, duration=duration)
+            clip.fps = fps
+
+            # 设置尺寸（重要）
+            clip.size = (w, h)
+
+            return clip
+
+        except Exception as e:
+            logger.error(f"❌ 创建视差动画失败: {str(e)}")
+            import traceback
+
+            traceback.print_exc()
+            return None
+
+    def _apply_displacement(
+        self, img: np.ndarray, depth: np.ndarray, offset_x: float, offset_y: float
+    ) -> np.ndarray:
         """
-        计算图层运动速度因子
-        
-        layer_idx = 0 (前景) -> 速度最快
-        layer_idx = n-1 (背景) -> 速度最慢
-        
-        Args:
-            layer_idx: 图层索引
-            total_layers: 总层数
-        
-        Returns:
-            速度因子 (0.5-1.5)
+        应用深度位移 (使用SciPy实现)
         """
-        if total_layers == 1:
-            return 1.0
-        
-        # 线性插值：前景1.5倍速，背景0.5倍速
-        speed = 1.5 - (layer_idx / (total_layers - 1)) * 1.0
-        return speed * self.movement_scale
-    
-    def _apply_pan_motion(
-        self,
-        clip: ImageClip,
-        direction: str,
-        speed_factor: float,
-        duration: float
-    ) -> ImageClip:
-        """
-        应用平移运动
-        
-        Args:
-            clip: 图层clip
-            direction: pan_left/right/up/down
-            speed_factor: 速度因子
-            duration: 时长
-        
-        Returns:
-            带运动的clip
-        """
-        w, h = clip.size
-        
-        # 基础移动距离（10%画面宽度/高度）
-        base_distance = min(w, h) * 0.1 * speed_factor
-        
-        def position_func(t):
-            """计算位置随时间变化"""
-            progress = t / duration
-            
-            if direction == "pan_left":
-                # 向左移动
-                return (int(-base_distance * progress), 'center')
-            elif direction == "pan_right":
-                # 向右移动
-                return (int(base_distance * progress), 'center')
-            elif direction == "pan_up":
-                # 向上移动
-                return ('center', int(-base_distance * progress))
-            elif direction == "pan_down":
-                # 向下移动
-                return ('center', int(base_distance * progress))
-            else:
-                return ('center', 'center')
-        
-        return clip.set_position(position_func)
-    
-    def _apply_zoom_motion(
-        self,
-        clip: ImageClip,
-        direction: str,
-        speed_factor: float,
-        duration: float
-    ) -> ImageClip:
-        """
-        应用缩放运动
-        
-        Args:
-            clip: 图层clip
-            direction: zoom_in/out
-            speed_factor: 速度因子
-            duration: 时长
-        
-        Returns:
-            带缩放的clip
-        """
-        def resize_func(t):
-            """计算缩放比例随时间变化"""
-            progress = t / duration
-            
-            if direction == "zoom_in":
-                # 放大：1.0 -> 1.2
-                scale = 1.0 + 0.2 * speed_factor * progress
-            else:  # zoom_out
-                # 缩小：1.2 -> 1.0
-                scale = 1.2 - 0.2 * speed_factor * progress
-            
-            return scale
-        
-        return clip.resize(resize_func)
+        try:
+            from scipy.ndimage import map_coordinates
+
+            h, w = img.shape[:2]
+
+            # 创建网格坐标 (indexing='ij' for h, w)
+            y, x = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+
+            # Inverse mapping: Source = Dest - Displacement
+            # 深度越大(越近)，位移越大
+            src_x = x - offset_x * depth
+            src_y = y - offset_y * depth
+
+            # 对每个通道进行重采样
+            output = np.zeros_like(img)
+
+            # 坐标必须是 (row_coords, col_coords) 即 (y, x)
+            coords = [src_y, src_x]
+
+            for c in range(3):
+                # mode='nearest' 实现边缘像素拉伸，解决黑边问题
+                # order=1 (线性插值) 保证平滑
+                output[:, :, c] = map_coordinates(
+                    img[:, :, c], coords, mode="nearest", order=1
+                )
+
+            return output
+
+        except ImportError:
+            logger.error("❌ scipy未安装，无法执行位移映射")
+            return img

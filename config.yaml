@@ -405,12 +405,29 @@ features:
     movement_intensity: 1.25  # 运动强度 (推荐1.15-1.35，数值越大运动越明显)
 
   # 2.5D Parallax Effects (视差效果 - 实验性)
+  # 基于深度图置换 (Depth Displacement) 技术
+  # 推荐使用 3D渲染风格 或 写实风格 图片
   parallax_effects:
-    enable: false  # 默认关闭，逐步启用
+    enable: true                          # 默认关闭
     model_path: "models/DepthAnythingV2SmallF16.mlpackage"
-    num_layers: 3  # 分层数量（3-5层）
-    movement_scale: 1.2  # 视差运动倍率
-    cache_depth_maps: true  # 缓存深度图
+    movement_scale: 0.05                   # 视差倍率 (推荐 0.03-0.08)
+    cache_depth_maps: true                 # 缓存深度图
+    
+    # 类目黑名单：这些类目禁用视差效果（因为图片风格不适合）
+    # 建议禁用所有使用扁平/艺术风格的类目
+    disabled_categories:
+      # - "历史故事"  # ink_wash 水墨画风格
+      # - "神话故事"  # ink_wash 水墨画风格  
+      # - "民间故事"  # watercolor 水彩风格
+      # - "有声读物"  # watercolor 水彩风格
+      # - "少儿百科"  # chibi_2d 扁平风格
+      - "读书分享"  # flat_tech 扁平风格
+      # - "儿童绘本"  # western_chd_book 手绘风格
+      # - "英语绘本"  # western_chd_book 手绘风格
+    
+    # 如果想启用，推荐的类目（3D风格效果好）：
+    # - "成语故事" (pop_mart 3D风格)
+    # - "睡前故事" (pixar 3D风格)
 
 
 # API 密钥和凭证

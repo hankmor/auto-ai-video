@@ -13,6 +13,7 @@ dependencies = [
     "pypinyin>=0.55.0",
     "pyyaml>=6.0",
     "requests>=2.32.5",
+    "scipy>=1.16.3",
     "volcengine>=1.0.212",
     "volcengine-python-sdk>=5.0.3",
 ]
@@ -21,4 +22,5 @@ dependencies = [
 parallax = [
     "coremltools>=9.0",
     "transformers>=4.57.3",
+    "scipy>=1.10.0",
 ]

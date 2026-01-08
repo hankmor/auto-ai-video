@@ -147,6 +147,16 @@ class Config:
     CAMERA_ROTATION_DEGREE: float = 1.5  # 旋转角度
     CAMERA_MOVEMENT_INTENSITY: float = 1.15  # 运动强度
 
+    # Parallax Effects (2.5D视差效果)
+    PARALLAX_ENABLE: bool = False  # 默认关闭
+    PARALLAX_MODEL_PATH: str = "models/DepthAnythingV2SmallF16.mlpackage"
+    # PARALLAX_NUM_LAYERS 已废弃 (新算法不需要分层)
+    PARALLAX_MOVEMENT_SCALE: float = 0.05  # 视差运动倍率 (推荐 0.03-0.08)
+    PARALLAX_CACHE_DEPTH_MAPS: bool = True  # 缓存深度图
+    PARALLAX_DISABLED_CATEGORIES: list = field(
+        default_factory=list
+    )  # 禁用视差的类目列表
+
     # Logging Configuration
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -393,6 +403,26 @@ class Config:
                     )
                 )
 
+            # Parallax Effects配置
+            parallax_effects = data["features"].get("parallax_effects", {})
+            if parallax_effects:
+                self.PARALLAX_ENABLE = parallax_effects.get(
+                    "enable", self.PARALLAX_ENABLE
+                )
+                self.PARALLAX_MODEL_PATH = parallax_effects.get(
+                    "model_path", self.PARALLAX_MODEL_PATH
+                )
+
+                self.PARALLAX_MOVEMENT_SCALE = float(
+                    parallax_effects.get("movement_scale", self.PARALLAX_MOVEMENT_SCALE)
+                )
+                self.PARALLAX_CACHE_DEPTH_MAPS = parallax_effects.get(
+                    "cache_depth_maps", self.PARALLAX_CACHE_DEPTH_MAPS
+                )
+                self.PARALLAX_DISABLED_CATEGORIES = parallax_effects.get(
+                    "disabled_categories", []
+                )
+
         # 加载日志配置
         if "logging" in data:
             log_config = data["logging"]
@@ -475,6 +505,19 @@ class Config:
         2. 当前类目为"英语绘本"
         """
         return self.ENABLE_BILINGUAL_MODE and self.CURRENT_CATEGORY == "英语绘本"
+
+    @property
+    def SHOULD_USE_PARALLAX(self) -> bool:
+        """检查当前上下文是否应启用视差效果"""
+        if not self.PARALLAX_ENABLE:
+            return False
+
+        # Check blacklist
+        current_cat = getattr(self, "CATEGORY", None)
+        if current_cat and current_cat in self.PARALLAX_DISABLED_CATEGORIES:
+            return False
+
+        return True
 
 
 C = Config()

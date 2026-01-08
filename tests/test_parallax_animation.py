@@ -10,7 +10,6 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from steps.effects.depth_estimator import DepthEstimator
-from steps.effects.layer_separator import LayerSeparator
 from steps.effects.parallax_animator import ParallaxAnimator
 
 
@@ -22,14 +21,24 @@ def test_parallax_animation():
     
     # 准备测试图片
     test_dir = os.path.dirname(os.path.abspath(__file__))
+    # test_image = os.path.join(test_dir, "popmart_test.png")
+    # test_image = os.path.join(test_dir, "scene_popmart.png")
     test_image = os.path.join(test_dir, "scene.png")
     
     if not os.path.exists(test_image):
         print(f"❌ 测试图片未找到: {test_image}")
-        return
+        # 尝试使用上一级目录的fallback
+        fallback = os.path.join(
+            os.path.dirname(test_dir), "assets", "image", "test_input.jpg"
+        )
+        if os.path.exists(fallback):
+            print(f"⚠️ 使用fallback图片: {fallback}")
+            test_image = fallback
+        else:
+            return
     
     # 1. 深度估计
-    print("\n1️⃣ 深度估计...")
+    print(f"\n1️⃣ 深度估计... ({os.path.basename(test_image)})")
     estimator = DepthEstimator()
     depth_map = estimator.estimate(test_image)
     
@@ -38,28 +47,18 @@ def test_parallax_animation():
         return
     
     print(f"✅ 深度图: shape={depth_map.shape}")
-    
-    # 2. 图层分离
-    print("\n2️⃣ 图层分离...")
-    separator = LayerSeparator(num_layers=3)
-    layers = separator.separate(test_image, depth_map)
-    
-    if not layers:
-        print("❌ 图层分离失败")
-        return
-    
-    print(f"✅ 分离完成: {len(layers)}层")
-    
-    # 3. 创建视差动画
-    print("\n3️⃣ 创建视差动画...")
-    animator = ParallaxAnimator(movement_scale=1.2)
-    
+
+    # 2. 视差动画 (直接使用深度图，无需分层)
+    print("\n2️⃣ 创建视差动画 (Depth Displacement)...")
+    animator = ParallaxAnimator(movement_scale=0.05)  # 3%位移
+
     # 测试pan_right动作
     parallax_clip = animator.create_parallax_clip(
-        layers=layers,
-        duration=3.0,  # 3秒测试视频
+        image_path=test_image,
+        depth_map=depth_map,
+        duration=3.0,
         action="pan_right",
-        fps=24
+        fps=24,
     )
     
     if parallax_clip is None:

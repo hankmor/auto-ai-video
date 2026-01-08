@@ -59,6 +59,13 @@ def parse_args():
         default=None,
     )
     parser.add_argument(
+        "--parallax",
+        "-p",
+        type=str,
+        help="【可选】视差开关 override (true/false/on/off)",
+        default=None,
+    )
+    parser.add_argument(
         "--emotion",
         "-E",
         type=str,

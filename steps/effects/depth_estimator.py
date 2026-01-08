@@ -78,8 +78,12 @@ class DepthEstimator:
         Returns:
             深度图 (H, W) numpy array, 值范围 0-255，或None如果失败
         """
+        # 输入验证
+        if not self._validate_input(image_path):
+            return None
+
         if self.model is None:
-            logger.error("模型未加载，无法进行深度估计")
+            logger.error("❌ 模型未加载，无法进行深度估计")
             return None
 
         # 检查缓存
@@ -93,6 +97,10 @@ class DepthEstimator:
             # 1. 加载图片
             img = Image.open(image_path).convert("RGB")
             original_size = img.size  # (W, H)
+
+            # 验证图片尺寸
+            if not self._validate_image_size(original_size):
+                return None
 
             # 2. Resize到模型支持的尺寸
             # 模型要求: 较短边518px，较长边是14的倍数
@@ -126,20 +134,36 @@ class DepthEstimator:
                 elif depth_map.shape[2] == 1:
                     depth_map = depth_map.squeeze(2)
 
+            # 释放中间变量
+            del img_resized
+            del prediction
+            del depth_output
+
             elapsed = (time.time() - start_time) * 1000
-            logger.info(f"🔍 深度估计完成，耗时: {elapsed:.2f}ms")
+            logger.info(
+                f"🔍 深度估计完成，耗时: {elapsed:.2f}ms (输入尺寸: {original_size[0]}x{original_size[1]})"
+            )
 
             # 4. 后处理 (resize回原始尺寸)
             depth_map = self._postprocess(depth_map, original_size)
 
-            # 4. 缓存
+            # 释放原始图片
+            img.close()
+
+            # 5. 缓存
             if cache_dir:
                 self._save_to_cache(depth_map, image_path, cache_dir)
 
             return depth_map
 
+        except MemoryError:
+            logger.error(f"❌ 内存不足，无法处理图片: {image_path}")
+            return None
         except Exception as e:
             logger.error(f"❌ 深度估计失败: {e}")
+            import traceback
+
+            logger.debug(traceback.format_exc())
             return None
 
     def _preprocess(self, img: Image.Image) -> np.ndarray:
@@ -215,7 +239,7 @@ class DepthEstimator:
         if os.path.exists(cache_file):
             try:
                 return np.load(cache_file)
-            except:
+            except Exception:
                 return None
         return None
 
@@ -231,3 +255,50 @@ class DepthEstimator:
 
         image_hash = hashlib.md5(image_path.encode()).hexdigest()
         return os.path.join(cache_dir, f"depth_{image_hash}.npy")
+
+    def _validate_input(self, image_path: str) -> bool:
+        """验证输入参数"""
+        if not image_path:
+            logger.error("❌ 图片路径为空")
+            return False
+
+        if not os.path.exists(image_path):
+            logger.error(f"❌ 图片文件不存在: {image_path}")
+            return False
+
+        # 检查文件是否可读
+        if not os.access(image_path, os.R_OK):
+            logger.error(f"❌ 无法读取图片文件: {image_path}")
+            return False
+
+        # 检查文件扩展名
+        valid_extensions = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+        ext = os.path.splitext(image_path)[1].lower()
+        if ext not in valid_extensions:
+            logger.warning(f"⚠️ 不常见的图片格式: {ext}, 尝试继续处理")
+
+        return True
+
+    def _validate_image_size(self, size: Tuple[int, int]) -> bool:
+        """验证图片尺寸是否合理"""
+        w, h = size
+
+        # 检查最小尺寸
+        min_size = 64
+        if w < min_size or h < min_size:
+            logger.error(f"❌ 图片尺寸过小: {w}x{h}, 最小要求: {min_size}x{min_size}")
+            return False
+
+        # 检查最大尺寸（避免内存溢出）
+        max_size = 8192
+        if w > max_size or h > max_size:
+            logger.warning(f"⚠️ 图片尺寸较大: {w}x{h}, 可能影响性能")
+            # 不阻止处理，只是警告
+
+        # 检查总像素数
+        max_pixels = 50_000_000  # 50MP
+        if w * h > max_pixels:
+            logger.error(f"❌ 图片像素过多: {w * h:,}, 最大支持: {max_pixels:,}")
+            return False
+
+        return True

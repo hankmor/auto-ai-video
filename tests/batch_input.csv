@@ -1,0 +1,3 @@
+topic,category,style,voice,enable_parallax
+Batch Test Story,en,,en-US-AnaNeural,True
+Wrong Parallax Test,en,,en-US-AnaNeural,False

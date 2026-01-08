@@ -42,6 +42,41 @@ class VideoAssemblerBase(ABC):
     ) -> VideoClip:
         pass
 
+    def _get_depth_estimator(self):
+        if not hasattr(self, "_depth_estimator") or self._depth_estimator is None:
+            from steps.effects.depth_estimator import DepthEstimator
+
+            self._depth_estimator = DepthEstimator()
+        return self._depth_estimator
+
+    def _get_parallax_animator(self):
+        if not hasattr(self, "_parallax_animator") or self._parallax_animator is None:
+            from steps.effects.parallax_animator import ParallaxAnimator
+
+            self._parallax_animator = ParallaxAnimator(
+                movement_scale=C.PARALLAX_MOVEMENT_SCALE
+            )
+        return self._parallax_animator
+
+    def _resize_to_fill(self, clip: VideoClip, target_size: tuple) -> VideoClip:
+        """Resize clip to fill target size (Aspect Fill)"""
+        W, H = target_size
+        src_w, src_h = clip.size
+
+        scale = max(W / src_w, H / src_h)
+        new_w = int(src_w * scale)
+        new_h = int(src_h * scale)
+
+        # Resize
+        clip = clip.resize(newsize=(new_w, new_h))
+
+        # Center Crop
+        if new_w != W or new_h != H:
+            x_offset = (new_w - W) // 2
+            y_offset = (new_h - H) // 2
+            clip = clip.crop(x1=x_offset, y1=y_offset, x2=x_offset + W, y2=y_offset + H)
+        return clip
+
     def _load_visual(self, scene: Scene, duration: float) -> Optional[VideoClip]:
         if C.ENABLE_ANIMATION and scene.video_path and os.path.exists(scene.video_path):
             try:
@@ -56,38 +91,56 @@ class VideoAssemblerBase(ABC):
 
         if scene.image_path and os.path.exists(scene.image_path):
             try:
-                img_clip = ImageClip(scene.image_path)
-                # Aspect Fill: Scale to cover target size, then center crop
-                if hasattr(C, "VIDEO_SIZE"):
-                    target_w, target_h = C.VIDEO_SIZE
-                    src_w, src_h = img_clip.size
-                    # Calculate scale to cover (use max ratio)
-                    scale_w = target_w / src_w
-                    scale_h = target_h / src_h
-                    scale = max(scale_w, scale_h)
+                # 1. Try Parallax Effect (if enabled)
+                if getattr(C, "SHOULD_USE_PARALLAX", False):
+                    try:
+                        logger.info(
+                            f"🌌 Attempting Parallax for scene {scene.scene_id}"
+                        )
+                        estimator = self._get_depth_estimator()
+                        animator = self._get_parallax_animator()
 
-                    # Calculate new dimensions after scaling
-                    new_w = int(src_w * scale)
-                    new_h = int(src_h * scale)
+                        # Prepare cache dir if enabled
+                        cache_dir = None
+                        if getattr(C, "PARALLAX_CACHE_DEPTH_MAPS", True):
+                            cache_dir = os.path.join(C.OUTPUT_DIR, "depth_cache")
+                            os.makedirs(cache_dir, exist_ok=True)
 
-                    # Resize with aspect fill - use newsize parameter
-                    img_clip = img_clip.resize(newsize=(new_w, new_h))
-
-                    # Center crop to exact target size
-                    if new_w != target_w or new_h != target_h:
-                        x_offset = (new_w - target_w) // 2
-                        y_offset = (new_h - target_h) // 2
-                        img_clip = img_clip.crop(
-                            x1=x_offset,
-                            y1=y_offset,
-                            x2=x_offset + target_w,
-                            y2=y_offset + target_h,
+                        # Estimate depth
+                        depth_map = estimator.estimate(
+                            scene.image_path, cache_dir=cache_dir
                         )
 
+                        # Get action (default to pan_right for parallax usually looks best)
+                        action = (
+                            getattr(scene, "camera_action", "pan_right") or "pan_right"
+                        )
+
+                        # Create clip
+                        p_clip = animator.create_parallax_clip(
+                            scene.image_path, depth_map, duration, action=action
+                        )
+
+                        if p_clip:
+                            # Resize to fill video size
+                            if hasattr(C, "VIDEO_SIZE"):
+                                p_clip = self._resize_to_fill(p_clip, C.VIDEO_SIZE)
+                            return p_clip
+
+                    except Exception as e:
+                        logger.warning(
+                            f"⚠️ Parallax generation failed, falling back to Ken Burns: {e}"
+                        )
+                        # Fallthrough to normal image handling
+
+                # 2. Normal Image Handling (Ken Burns)
+                img_clip = ImageClip(scene.image_path)
+
+                if hasattr(C, "VIDEO_SIZE"):
+                    img_clip = self._resize_to_fill(img_clip, C.VIDEO_SIZE)
+
                 # Use camera action from scene, default to 'zoom_in' or 'pan_right' etc.
-                # If parsed script has action, use it.
                 action = getattr(scene, "camera_action", "zoom_in")
-                # Fallback if action is None or empty
                 if not action:
                     action = "zoom_in"
 
