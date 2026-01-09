@@ -38,6 +38,7 @@ class ParallaxAnimator:
         duration: float,
         action: str = "pan_right",
         fps: int = 24,
+        target_size: Optional[Tuple[int, int]] = None,
     ) -> Optional[ImageClip]:
         """
         创建视差动画视频
@@ -48,17 +49,47 @@ class ParallaxAnimator:
             duration: 时长
             action: 运动类型
             fps: 帧率
+            target_size: 目标视频尺寸 (Width, Height)，用于预先Resize优化性能
 
         Returns:
             ImageClip (包含每帧变换逻辑)
         """
+        # 检查动作是否支持 (目前仅支持 Pan, Zoom 建议回退到 Ken Burns)
+        if action not in ["pan_right", "pan_left", "pan_up", "pan_down"]:
+            logger.info(f"ℹ️ Parallax暂不支持动作 '{action}'，回退到标准Ken Burns效果")
+            return None
+
         try:
             # 1. 准备数据
             # 读取图片并转为numpy数组 (RGB)
             img = Image.open(image_path).convert("RGB")
+
+            # 性能优化：如果指定了 target_size，先缩小图片和深度图
+            # 大幅减少 map_coordinates 的计算量 (e.g. 4K -> 1080p)
+            if target_size:
+                w_target, h_target = target_size
+                # 保持比例填充 Resize (Aspect Fill)
+                # 计算缩放比例
+                org_w, org_h = img.size
+                scale = max(w_target / org_w, h_target / org_h)
+                new_w = int(org_w * scale)
+                new_h = int(org_h * scale)
+
+                # Resize Image
+                img = img.resize((new_w, new_h), Image.LANCZOS)
+
+                # Resize Depth Map (First convert to PIL)
+                depth_img = Image.fromarray(depth_map)
+                depth_img = depth_img.resize((new_w, new_h), Image.BILINEAR)
+                depth_map = np.array(depth_img)
+
+                logger.info(
+                    f"⚡ Parallax Optimized: Resized input from ({org_w}, {org_h}) to ({new_w}, {new_h})"
+                )
+
             img_arr = np.array(img)
 
-            # 确保深度图尺寸匹配
+            # 确保深度图尺寸匹配 (此时应该已经匹配了，但为了健壮性保留检查)
             h, w = img_arr.shape[:2]
             if depth_map.shape != (h, w):
                 logger.debug(f"调整深度图尺寸: {depth_map.shape} -> {(h, w)}")

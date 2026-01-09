@@ -128,7 +128,7 @@ models:
     # 迪士尼绘本风: 适合英语绘本。特点: 经典手绘、色彩饱满、温暖、黄金时代插画。
     disney_storybook: "Classic fairy tale storybook illustration, Golden Age style, vibrant colors, magical atmosphere, hand painted"
     # Leo Timmers 风格: 适合儿童绘本。特点: 鲜艳丙烯画、幽默、高反光质感、动态夸张。
-    leo_timmers: "Leo Timmers: A Concise Style Analysis.\n Leo Timmers represents a fusion of geometric precision and painterly warmth. His distinctive aesthetic is defined by four key elements:\nBold, Sculptural Forms: Characters and objects are built from solid, rounded shapes that feel weighty and 'chunky,' resembling vintage wooden toys.\nVibrant Acrylics: He uses a highly saturated palette with visible brush textures, preventing the digital-looking smoothness of vector art.\nKinetic Whimsy: His work is full of energy and slapstick humor, often featuring expressive animals and precarious, motion-filled compositions.\nMid-Century Retro: The style evokes 1950s advertising and design, combining sleek mechanical lines with a nostalgic, friendly atmosphere."
+    leo_timmers: "Leo Timmers Style Illustration: A fusion of geometric precision and painterly warmth. Distinctive aesthetic defined by:\nBold, Sculptural Forms: Characters and objects are built from solid, rounded shapes that feel weighty and 'chunky'.\nVibrant Acrylics: Highly saturated palette with visible brush textures.\nKinetic Whimsy: Full of energy, often featuring expressive animals and dynamic compositions.\nMid-Century Retro: Evokes 1950s design, combining sleek lines with a nostalgic, friendly atmosphere."
     # 欧美风儿童绘本插画风格(Western Children's Book Illustration Style)
     western_chd_book: "欧美手绘风儿童插画（Hand-drawn Children's Book Illustration）。\n 其核心特点如下：\n 笔触质感（Dry Media）： 极力模拟蜡笔、粉笔或粗颗粒彩铅在纸上涂抹的效果，有明显的噪点和留白，不追求平滑。\n 线条风格（Loose Lines）： 轮廓线松弛、随意，带有断续感，不像电脑绘图那样规整，显得拙朴可爱。\n 色彩氛围（Warm & Cozy）： 偏爱暖黄、橘红等高饱和度色调，光影柔和模糊，营造出“家”和“童年”的治愈感。\n 造型特征（Whimsical）： 人物比例略微夸张（大头、大眼），表情生动，强调情绪传达而非解剖学的准确性。"
 
@@ -145,7 +145,7 @@ models:
     # "英语绘本": "disney_storybook"
     "英语绘本": "western_chd_book"
     "神话故事": "ink_wash"
-    "民间故事": "watercolor"
+    "民间故事": "leo_timmers"
     "少儿百科": "chibi_2d"
     "读书分享": "flat_tech"
     "有声读物": "watercolor"

@@ -117,8 +117,13 @@ class VideoAssemblerBase(ABC):
                         )
 
                         # Create clip
+                        target_size = getattr(C, "VIDEO_SIZE", (1080, 1920))
                         p_clip = animator.create_parallax_clip(
-                            scene.image_path, depth_map, duration, action=action
+                            scene.image_path,
+                            depth_map,
+                            duration,
+                            action=action,
+                            target_size=target_size,
                         )
 
                         if p_clip:
