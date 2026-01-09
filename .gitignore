@@ -52,3 +52,4 @@ output/
 # Given it has keys now, better ignore it.
 .DS_Store
 assets/videos
+batch_output
